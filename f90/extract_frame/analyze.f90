@@ -593,6 +593,8 @@ module mod_analyze
       retval = nf90_def_var(io_o, "cell_angles",  nf90_real, (/dim_spatial, dim_frame/),           var_angle)
 
       retval = nf90_put_att(io_o, var_coords,  "units",             "angstrom")
+      retval = nf90_put_att(io_o, var_box,     "units",             "angstrom")
+      retval = nf90_put_att(io_o, var_angle,   "units",             "degree")
       retval = nf90_put_att(io_o, nf90_global, "Conventions",       "AMBER")
       retval = nf90_put_att(io_o, nf90_global, "ConventionVersion", "1.0")
       retval = nf90_put_att(io_o, nf90_global, "program",           "ANATRA")

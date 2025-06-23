@@ -523,6 +523,8 @@ module mod_catcrd_analyze
       retval = nf90_def_var(iunit_out, "cell_angles",  nf90_real, (/dim_spatial, dim_frame/),           var_angle)
 
       retval = nf90_put_att(iunit_out, var_coords,  "units",             "angstrom")
+      retval = nf90_put_att(iunit_out, var_box,     "units",             "angstrom")
+      retval = nf90_put_att(iunit_out, var_angle,   "units",             "degree")
       retval = nf90_put_att(iunit_out, nf90_global, "Conventions",       "AMBER")
       retval = nf90_put_att(iunit_out, nf90_global, "ConventionVersion", "1.0")
       retval = nf90_put_att(iunit_out, nf90_global, "program",           "ANATRA")
@@ -668,14 +670,13 @@ module mod_catcrd_analyze
 
       ! - Define coordinate
       !
-      !retval = nf90_def_var(iunit_out, "coordinates",  nf90_real, (/dim_spatial, dim_atom, dim_frame/), var_coords) 
-      !retval = nf90_def_var(iunit_out, "cell_lengths", nf90_real, (/dim_spatial, dim_frame/),           var_box)
-      !retval = nf90_def_var(iunit_out, "cell_angles",  nf90_real, (/dim_spatial, dim_frame/),           var_angle)
-      retval = nf90_def_var(iunit_out, "coordinates",  nf90_real, [dim_spatial, dim_atom, dim_frame], var_coords) 
-      retval = nf90_def_var(iunit_out, "cell_lengths", nf90_real, [dim_spatial, dim_frame],           var_box)
-      retval = nf90_def_var(iunit_out, "cell_angles",  nf90_real, [dim_spatial, dim_frame],           var_angle)
+      retval = nf90_def_var(iunit_out, "coordinates",  nf90_real, (/dim_spatial, dim_atom, dim_frame/), var_coords) 
+      retval = nf90_def_var(iunit_out, "cell_lengths", nf90_real, (/dim_spatial, dim_frame/),           var_box)
+      retval = nf90_def_var(iunit_out, "cell_angles",  nf90_real, (/dim_spatial, dim_frame/),           var_angle)
 
       retval = nf90_put_att(iunit_out, var_coords,  "units",             "angstrom")
+      retval = nf90_put_att(iunit_out, var_box,     "units",             "angstrom")
+      retval = nf90_put_att(iunit_out, var_angle,   "units",             "degree")
       retval = nf90_put_att(iunit_out, nf90_global, "Conventions",       "AMBER")
       retval = nf90_put_att(iunit_out, nf90_global, "ConventionVersion", "1.0")
       retval = nf90_put_att(iunit_out, nf90_global, "program",           "ANATRA")
