@@ -73,6 +73,12 @@ module mod_analyze
         call get_total_step_from_dcd(input%ftraj, nstep)
       else if (trajtype_in == TrajTypeXTC) then
         call get_total_step_from_xtc(input%ftraj, nstep)
+      else if (trajtype_in == TrajTypeNCD) then
+        call get_total_step_from_netcdf(input%ftraj, nstep)
+      end if
+
+      if (option%use_allsnap) then
+        next = nstep 
       end if
 
       ! memory allocation
@@ -93,7 +99,7 @@ module mod_analyze
       ! Extract all snapshots
       !
       else
-        do istep = 1, next
+        do istep = 1, nstep
           rand(istep) = istep 
         end do
       end if
