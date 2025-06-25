@@ -250,7 +250,7 @@ module mod_analyze
 
       else if (trajtype_in == TrajTypeNCD) then
 
-        if (trajtype_out == TrajTypeNCD) then
+        if (trajtype_out == TrajTypeDCD) then
           !call xtc2dcd(input, output, option, rand, used_snap)
           write(iw,'("Analyze> Error.")')
           write(iw,'("Sorry, NetCDF => DCD convert is not supported for shuffle.")')
