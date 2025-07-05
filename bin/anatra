@@ -21,6 +21,7 @@ anas=("trjconv"             \
       "area_per_lipid"      \
       "z_profile"           \
       "z_orient"            \
+      "cluster_size"        \
       "species_info")
 
 anas_abbrev=("trj"   \
@@ -34,6 +35,7 @@ anas_abbrev=("trj"   \
 	     "apl"   \
 	     "zprof" \
 	     "zori"  \
+	     "cls"   \
 	     "spec") 
 
 exes=("trj_convert/tr_convert.tcl"           \
@@ -47,6 +49,7 @@ exes=("trj_convert/tr_convert.tcl"           \
       "area_per_lipid/analysis.tcl"          \
       "z_profile/analysis.tcl"               \
       "z_orient/analysis.tcl"                \
+      "cluster_size/analysis.tcl"            \
       "species_info/analysis.tcl")
 
 hlp=("trjconv             (trj)   : Convert trajectory"                  \
@@ -60,6 +63,7 @@ hlp=("trjconv             (trj)   : Convert trajectory"                  \
      "area_per_lipid      (apl)   : Area Per Lipid Analysis"             \
      "z_profile           (zprof) : Z-profile Analysis"                  \
      "z_orient            (zori)  : Orientation Analysis along z"        \
+     "cluster_size        (cls)   : Cluster-size Analysis"               \
      "species_info        (spec)  : Get Species information")
 
 nanas=${#anas[@]}

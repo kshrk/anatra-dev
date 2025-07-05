@@ -72,6 +72,7 @@ list="center_of_mass          \
       z_orient                \
       radial_distr            \
       spatial_distr           \
+      cluster_size            \
       extract_frame           \
       random_frame            \
       histogram               \

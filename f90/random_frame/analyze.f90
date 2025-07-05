@@ -193,6 +193,8 @@ module mod_analyze
         call get_total_step_from_dcd(input%ftraj, nstep)
       else if (trajtype_in == TrajTypeXTC) then
         call get_total_step_from_xtc(input%ftraj, nstep)
+      else if (trajtype_in == TrajTypeNCD) then
+        call get_total_step_from_netcdf(input%ftraj, nstep)
       end if
 
       allocate(frame_index(nstep))
@@ -900,7 +902,27 @@ module mod_analyze
       call netcdf_open(input%ftraj(1), io_i)
       call netcdf_read_dimension(io_i, nc_in)
       call netcdf_close(io_i)
-      call get_total_step_from_netcdf(input%ftraj, nstep_tot) 
+      call get_total_step_from_netcdf(input%ftraj, nstep_tot)
+
+      ! - Define dimensions
+      !
+      retval = nf90_def_dim(io_o, "frame",   nf90_unlimited, dim_frame)
+      retval = nf90_def_dim(io_o, "spatial", 3,              dim_spatial)
+      retval = nf90_def_dim(io_o, "atom",    natm,           dim_atom)
+     
+      ! - Define coordinate 
+      !
+      retval = nf90_def_var(io_o, "coordinates",  nf90_real, (/dim_spatial, dim_atom, dim_frame/), var_coords) 
+      retval = nf90_def_var(io_o, "cell_lengths", nf90_real, (/dim_spatial, dim_frame/),           var_box)
+      retval = nf90_def_var(io_o, "cell_angles",  nf90_real, (/dim_spatial, dim_frame/),           var_angle)
+
+      retval = nf90_put_att(io_o, var_coords,  "units",             "angstrom")
+      retval = nf90_put_att(io_o, nf90_global, "Conventions",       "AMBER")
+      retval = nf90_put_att(io_o, nf90_global, "ConventionVersion", "1.0")
+      retval = nf90_put_att(io_o, nf90_global, "program",           "ANATRA")
+      retval = nf90_put_att(io_o, nf90_global, "programVersion",    "1.0")
+
+      retval = nf90_enddef(io_o)
 
       ! Allocation of working space
       !
