@@ -19,7 +19,6 @@ fi
 list="catcrd"
 
 cwd=`pwd`
-mkdir -p bin
 for d in $list;do
   echo "o Installing $d ..."
   echo ""
