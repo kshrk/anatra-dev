@@ -24,7 +24,7 @@ anas=("histogram"                \
 
 anas_abbrev=("hist"                \
              "pmf"                 \
-             "rrdf"                \
+             "rrpmf"               \
              "extf"                \
              "randf"               \
              "sdef"                \
@@ -48,7 +48,7 @@ exes=("histogram.x"                 \
 
 hlp=("histogram               (hist)   : Histogram Analysis"                         \
      "potential_of_mean_force (pmf)    : Free-energy Profile Analysis"               \
-     "restricted_radial       (rrdf)   : Restricted Radial Function Analysis"        \
+     "restricted_radial       (rrpmf)  : Restricted Radial Analysis"                 \
      "extract_frame           (extf)   : Extract Frames Using CV"                    \
      "random_frame            (randf)  : Randomly Extract Frames"                    \
      "state_define            (sdef)   : Define States From Time-series Data"        \

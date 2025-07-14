@@ -165,7 +165,9 @@ module mod_analyze
 
       ! Normalize 
       !
-      distr(:) = distr(:) / (dble(istep_tot * nmol))
+      !distr(:) = distr(:) / (dble(istep_tot * nmol))
+      distr(:) = distr(:) / (dble(istep_tot))
+      distr(:) = distr(:) / sum(distr(:))
 
       ! Output 
       !
@@ -173,7 +175,8 @@ module mod_analyze
       call open_file(fname, io)
       acc = 0.0d0
       do isize = 1, nmol
-        acc = acc + distr(isize) * isize
+        !acc = acc + distr(isize) * isize
+        acc = acc + distr(isize)
         write(io, '(i0,2x,e15.7,2x,e15.7)') isize, distr(isize), acc
       end do 
       close(io) 

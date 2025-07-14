@@ -31,7 +31,6 @@ proc show_usage {arglist} {
     puts "  -mode       <analysis mode (residue or whole or atom)>                   \\"
     puts "              (default: residue)                                           \\"
     puts "  -rcut       <cutoff distance for judging (Angstrom)>                     \\"
-    puts "  -dt         <time interval>                                              \\"
     puts "  -prep_only  <where analysis is performed or not (true or false)          \\"
     puts "              (default: false)"
     puts ""
@@ -45,7 +44,6 @@ proc show_usage {arglist} {
     puts "  -sel0      not water  \\"
     puts "  -mode      residue    \\"
     puts "  -rcut      3.5        \\"
-    puts "  -dt        0.1        \\"
     puts "  -prep_only false"
     puts ""
     exit
@@ -62,7 +60,7 @@ proc define_optinfo {} {
 
   set opt(fhead)      "out"
   set opt(rcut)       3.5 
-  set opt(dt)         0.1 
+  set opt(dt)         1.0 
   set opt(mode)       "residue"
 
 }
@@ -95,7 +93,7 @@ proc show_optinfo {} {
   puts "fhead      = $opt(fhead)"
   puts "mode       = $opt(mode)"
   puts "rcut       = $opt(rcut)"
-  puts "dt         = $opt(dt)"
+  #puts "dt         = $opt(dt)"
   puts ""
 
 }
