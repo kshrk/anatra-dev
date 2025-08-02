@@ -73,7 +73,7 @@ module mod_analyze
       ! Arrays
       !
       type(s_cv), allocatable :: cv(:)
-      real(8),    allocatable :: state_count(:), fe_state(:)
+      real(8),    allocatable :: state_count(:), fe_state(:), pop(:)
       real(8),    allocatable :: fe_ave(:), fe_err(:)
       real(8),    allocatable :: fel_err(:)
 
@@ -135,10 +135,12 @@ module mod_analyze
         allocate(state_count(nstate))
         allocate(fe_state(nstate))
         allocate(fe_ave(nstate), fe_err(nstate))
+        allocate(pop(nstate))
         state_count = 0
         fe_state    = 0.0d0
         fe_ave      = 0.0d0
         fe_err      = 0.0d0
+        pop         = 0.0d0
       end if
 
       ! Read CV files
@@ -309,6 +311,7 @@ module mod_analyze
         do istate = 1, nstate
           sval = state_count(istate)
           fe_state(istate) = - kT * log(sval/sref)
+          pop(istate)      = state_count(istate) / sref
         end do
       end if
 
@@ -494,7 +497,7 @@ module mod_analyze
         write(fhead_out,'(a,".festate")') trim(output%fhead)
         call open_file(fhead_out, iunit)
         do istate = 1, nstate
-          write(iunit,'(2f15.7)') fe_state(istate), fe_err(istate)
+          write(iunit,'(3f15.7)') fe_state(istate), fe_err(istate), pop(istate)
         end do
         close(iunit)
       end if

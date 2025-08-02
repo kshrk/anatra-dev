@@ -106,7 +106,7 @@ module mod_analyze
       write(iw,*)
       write(iw,'("Analyze> Get Connectivity")')
       do ifile = 1, nfile
-        call get_state_connectivity(option, state(ifile), boundary)
+        call get_state_connectivity(output, option, state(ifile), boundary)
       end do
       call show_state_connectivity(option, boundary)
       write(iw,'(">> Done")')
@@ -287,10 +287,11 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine get_state_connectivity(option, state, boundary)
+    subroutine get_state_connectivity(output, option, state, boundary)
 !-----------------------------------------------------------------------
       implicit none
 
+      type(s_output),   intent(in)    :: output
       type(s_option),   intent(in)    :: option
       type(s_state),    intent(in)    :: state 
       type(s_boundary), intent(inout) :: boundary 
@@ -304,6 +305,11 @@ module mod_analyze
       integer :: istep, imol
       integer :: snow, sprev
 
+      ! I/O
+      !
+      integer                :: io
+      character(len=MaxChar) :: fname
+
 
       ! Setup
       !
@@ -314,6 +320,14 @@ module mod_analyze
       if (.not. allocated(boundary%is_connected)) then
         allocate(boundary%is_connected(nstate, nstate))
         boundary%is_connected = .false.
+      end if
+
+      if (option%read_connectivity) then
+        write(fname,'(a,".connect")') trim(output%fhead)
+        call open_file(fname, io, frmt = 'unformatted', stat = 'old')
+        read(io) boundary%is_connected 
+        close(io) 
+        return
       end if
 
       do imol = 1, nmol
@@ -333,6 +347,12 @@ module mod_analyze
 
         end do
       end do
+
+      write(fname,'(a,".connect")') trim(output%fhead)
+      call open_file(fname, io, frmt = 'unformatted', stat = 'replace')
+      write(io) boundary%is_connected 
+      close(io) 
+      return
 
     end subroutine get_state_connectivity
 !-----------------------------------------------------------------------

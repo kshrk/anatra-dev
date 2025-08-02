@@ -54,7 +54,8 @@ subroutine show_usage
 
   if (trim(f_ctrl) == "-h") then
     write(iw,'("&input_param")')
-    write(iw,'(" flist = ""cvlist"" ! File that contains List of CV")')
+    write(iw,'(" flist_cv     = ""cvlist""     ! File that contains List of CV")')
+    write(iw,'(" flist_weight = ""weightlist"" ! File that contains List of Weight (Optional)")')
     write(iw,'("/")')
 
     write(iw,'("&output_param")')

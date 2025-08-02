@@ -158,7 +158,12 @@
         is2 = boundary%b2p(2, ib)
 
         state_sum      = hit_count(ib)
-        Kijk(:, :, ib) = Kijk(:, :, ib) / (state_sum * dt) 
+
+        if (state_sum < 1.0d-10) then
+          Kijk(:, :, ib) = 0.0d0
+        else 
+          Kijk(:, :, ib) = Kijk(:, :, ib) / (state_sum * dt) 
+        end if
 
       end do
 

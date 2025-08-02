@@ -12,6 +12,16 @@ cwd=`pwd`
 XDRPATH=$ANATRA_PATH/f90/lib/external/xdr-interface-fortran
 NCPATH=$ANATRA_PATH/f90/lib/external/netcdf
 
+if [ "$compiler" == "intel" ];then
+  chk_ifort=`which ifort    >/dev/null 2>&1 && echo 1 || echo 0`
+  chk_ifx=`which ifx        >/dev/null 2>&1 && echo 1 || echo 0`
+  if [ "$chk_ifort" -eq 1 ];then
+    fortcomp=ifort
+  elif [ "$chk_ifx" -eq 1 ];then
+    fortcomp=ifx
+  fi
+fi
+
 if [ "$compiler" != "fugaku" ]; then
   cd $XDRPATH
     if [ ! -e xdrfile-1.1.4 ]; then
@@ -31,7 +41,7 @@ if [ "$compiler" != "fugaku" ]; then
     ./configure FC=gfortran CC=gcc --prefix=$NCPATH/netcdf
     make && make install
   elif [ "$compiler" == "intel" ];then
-    ./configure FC=ifort CC=icc --prefix=$NCPATH/netcdf
+    ./configure FC=$fortcomp --prefix=$NCPATH/netcdf
     make && make install
   fi
   cd ..
@@ -48,7 +58,7 @@ if [ "$compiler" != "fugaku" ]; then
   if [ "$compiler" == "gcc" ];then
     ./configure FC=gfortran CC=gcc --prefix=$NCPATH/netcdf --with-netcdf=$NCPATH/netcdf
   elif [ "$compiler" == "intel" ];then
-    ./configure FC=ifort CC=icc --prefix=$NCPATH/netcdf --with-netcdf=$NCPATH/netcdf
+    ./configure FC=$fortcomp --prefix=$NCPATH/netcdf --with-netcdf=$NCPATH/netcdf
   fi
 
   make && make install

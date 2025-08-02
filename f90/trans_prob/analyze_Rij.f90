@@ -44,9 +44,10 @@
         end do
 
         if (option%is_initial(js) .and. it_reac == 0) then
-          write(iw,'("Calc_Rij_wo_normalize> Error.")')
-          write(iw,'("No reaction is observed.")')
-          stop
+          return
+          !write(iw,'("Calc_Rij_wo_normalize> Error.")')
+          !write(iw,'("No reaction is observed.")')
+          !stop
         end if
 
         ! Calc.

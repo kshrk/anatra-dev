@@ -82,6 +82,8 @@ module mod_ctrl
   !
   public  :: read_ctrl
   private :: read_ctrl_option
+  private :: show_input
+  private :: show_output
 
   contains
 
@@ -111,7 +113,11 @@ module mod_ctrl
       call open_file(f_ctrl, io, stat = 'old')
 
       call read_ctrl_input  (io, input)
+      call show_input(input)
+
       call read_ctrl_output (io, output)
+      call show_output(output)
+
       call read_ctrl_option (io, option)
 
       if (option%use_bootstrap) then
@@ -392,6 +398,67 @@ module mod_ctrl
 
 
     end subroutine read_ctrl_option
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine show_input(input)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_input), intent(in) :: input
+
+      ! Dummy
+      !
+      integer :: i
+
+      ! Check
+      !
+      if (input%ncv  == 0) then
+        write(iw,'("Error. fcv should be specified.")')
+        stop
+      end if
+
+      ! Print
+      !
+      write(iw,*)
+      write(iw,'(">> Input section parameters")')
+      do i = 1, input%ncv
+        write(iw,'("fcv", 3x, i0, 3x, " = ", a)') i, trim(input%fcv(i))
+      end do
+
+      if (trim(input%flist_weight) /= '') then
+        do i = 1, input%ncv
+          write(iw,'("fweight", 3x, i0, 3x, " = ", a)') i, trim(input%fweight(i))
+        end do
+      end if
+
+
+    end subroutine show_input
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine show_output(output)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_output), intent(in) :: output 
+
+
+      ! Check
+      !
+      if (trim(output%fhead) == '') then
+        write(iw,'("Error. fhead should be specified.")')
+        stop
+      end if
+
+      ! Print
+      !
+      write(iw,*)
+      write(iw,'(">> Output section parameters")')
+      write(iw,'("fhead          = ", a)') trim(output%fhead)
+
+
+    end subroutine show_output
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------

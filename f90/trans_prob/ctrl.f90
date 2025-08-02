@@ -26,6 +26,7 @@ module mod_ctrl
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
+    logical :: read_connectivity    = .false.
     logical :: write_Rij_bin        = .false. 
     logical :: read_Rij_bin         = .false.
     logical :: write_Kijk_bin       = .false.
@@ -149,6 +150,7 @@ module mod_ctrl
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
+      logical :: read_connectivity    = .false.
       logical :: write_Kijk_bin       = .false.
       logical :: read_Kijk_bin        = .false.
       logical :: write_Rij_bin        = .false. 
@@ -189,6 +191,7 @@ module mod_ctrl
         use_reflection_state, &
         use_product_state,    &
         use_dissociate_state, &
+        read_connectivity,    &
         write_Kijk_bin,       &
         read_Kijk_bin,        &
         write_Rij_bin,        &
@@ -224,6 +227,7 @@ module mod_ctrl
         write(iw,'("use_reflection_state = ", a)')   get_tof(use_reflection_state)
         write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
         write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
+        write(iw,'("read_connectivity    = ", a)')   get_tof(read_connectivity)
         write(iw,'("write_Kijk_bin       = ", a)')   get_tof(write_Kijk_bin)
         write(iw,'("read_Kijk_bin        = ", a)')   get_tof(read_Kijk_bin)
         write(iw,'("write_Rij_bin        = ", a)')   get_tof(write_Rij_bin)
@@ -362,6 +366,7 @@ module mod_ctrl
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
+      option%read_connectivity    = read_connectivity
       option%write_Kijk_bin       = write_Kijk_bin
       option%read_Kijk_bin        = read_Kijk_bin
       option%write_Rij_bin        = write_Rij_bin
