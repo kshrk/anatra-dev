@@ -87,6 +87,7 @@ list="center_of_mass          \
       random_frame            \
       histogram               \
       average_function        \
+      bootstrap_prepper       \
       trans_prob              \
       return_prob             \
       restricted_radial       \

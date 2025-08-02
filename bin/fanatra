@@ -18,6 +18,7 @@ anas=("histogram"                \
       "state_define"             \
       "moving_average"           \
       "average_function"         \
+      "bootstrap_prepper"        \
       "return_prob"              \
       "rprate"                   \
       "trans_prob") 
@@ -30,6 +31,7 @@ anas_abbrev=("hist"                \
              "sdef"                \
              "movave"              \
              "avef"                \
+	     "boot"                \
              "rp"                  \
              "rprate"              \
 	     "tpm")
@@ -42,6 +44,7 @@ exes=("histogram.x"                 \
       "state_define.x"              \
       "moving_average.x"            \
       "average_function.x"          \
+      "bootstrap_prepper.x"         \
       "return_prob.x"               \
       "rprate_analysis.x"           \
       "trans_prob.x") 
@@ -54,6 +57,7 @@ hlp=("histogram               (hist)   : Histogram Analysis"                    
      "state_define            (sdef)   : Define States From Time-series Data"        \
      "moving_average          (movave) : Moving Average Analysis"                    \
      "average_function        (avef)   : Function Average Analysis"                  \
+     "bootstrap_prepper       (boot)   : Bootstrap Sample Generator"                 \
      "return_prob             (rp)     : Returning Probability Analysis"             \
      "rprate                  (rprate) : Rate Constant Analysis based on RP theory"  \
      "trans_prob              (tpm)    : Transition Probability Analysis")
