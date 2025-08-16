@@ -35,11 +35,14 @@
       integer :: js1, js2
       integer :: ncount, nt_life
       real(8) :: psum, pint
+      real(8) :: pval, qval
 
       ! Arrays
       !
       real(8), allocatable :: Qij(:, :)
       real(8), allocatable :: Pi(:, :)
+
+      real(8), allocatable :: Qint(:), Mfinal(:)
 
 
       ! Setup
@@ -82,6 +85,7 @@
       nt_life = nt_life + 10
       allocate(Qij(0:nt_life, -nboundary:nboundary))
       allocate(Pi(0:nt_life, nstate))
+      allocate(Qint(-nboundary:nboundary), Mfinal(-nboundary:nboundary))
 
       ! Propagation
       !
@@ -94,32 +98,51 @@
       write(fname,'(a,".pj")') trim(output%fhead)
       call open_file(fname, io_p)
 
-      Qij   = 0.0d0
-      Pi    = 0.0d0
-      pint  = 0.0d0
+      Qij       = 0.0d0
+      Pi        = 0.0d0
+      pint      = 0.0d0
+      Qint      = 0.0d0
+      Mfinal(:) = Mij(nt_range, :) 
 
       it = -1 
       do istep = 0, nt_extend
         it = it + 1
 
         if (mod(istep, 1000) == 0) then
-          write(iw,'("Step: ", i0, "Time: ", f20.10)') istep, istep * dt
+          write(iw,'("Step: ", i20, " Time: ", f20.10)') istep, istep * dt
         end if 
 
         ! Calc. Q
         !
+        !$omp parallel private(ib, jb, is1, is2, js1, js2, jsta, jstep, it_rel, qval) default(shared)
+        !$omp          do 
         do ib = -nboundary, nboundary
 
+          qval = 0.0d0
           if (ib == 0) cycle 
 
-          is1 = boundary%b2p(1, ib)
-          is2 = boundary%b2p(2, ib)
-
-          if (istep <= nt_range .and. option%is_initial(is1)) then
-            Qij(it, ib) = Qij(it, ib) + Rij(it, is2, is1)
+          if (option%use_reflection_state) then
+            if (boundary%conv_direc(-ib)) cycle
           end if
 
-          if (istep == 0) cycle 
+          is1  = boundary%b2p(1, ib)
+          is2  = boundary%b2p(2, ib)
+
+          if (istep <= nt_range .and. option%is_initial(is1)) then
+            !Qij(it, ib) = Qij(it, ib) + Rij(it, is2, is1)
+            qval = qval + Rij(it, is2, is1)
+          end if
+
+          if (istep == 0) then
+            Qij(it, ib) = qval
+            if (option%use_reflection_state) then
+              if (boundary%conv_direc(ib)) then
+                Qij(it, -ib) = Qij(it, ib)
+                Qij(it,  ib) = 0.0d0
+              end if
+            end if
+            cycle
+          end if 
 
           do jb = -nboundary, nboundary
 
@@ -134,29 +157,42 @@
             it_rel = - 1 
             do jstep = max(0, jsta), istep - 1
               it_rel     = it_rel + 1
-              Qij(it, ib) = Qij(it, ib)  &
-                + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
+              !Qij(it, ib) = Qij(it, ib)  &
+              !  + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
+              qval = qval + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
             end do 
 
           end do
 
+          Qij(it, ib) = qval
+
           if (option%use_reflection_state) then
             if (boundary%conv_direc(ib)) then
               Qij(it, -ib) = Qij(it, ib)
+              Qij(it,  ib) = 0.0d0
             end if
           end if
 
         end do  ! ib
+        !$omp end do
+        !$omp end parallel
 
         ! Calc. P
         !
+        !$omp parallel private(is, js, ib, jsta, it_rel, jstep, pval) default(shared)
+        !$omp do 
         do is = 1, nstate
 
+          pval = 0.0d0
           if (istep <= nt_range .and. option%is_initial(is)) then
-            Pi(it, is) = Pi(it, is) + P0(it, is)
+            !Pi(it, is) = Pi(it, is) + P0(it, is)
+            pval = pval + P0(it, is)
           end if
 
-          if (istep == 0) cycle
+          if (istep == 0) then
+            Pi(it, is) = pval
+            cycle
+          end if
 
           do js = 1, nstate
 
@@ -167,13 +203,22 @@
             it_rel = - 1
             do jstep = max(0, jsta), istep - 1
               it_rel = it_rel + 1
-              Pi(it, is) = Pi(it, is)  &
+              !Pi(it, is) = Pi(it, is)  &
+              !  + dt * Mij(istep - jstep, ib) * Qij(it_rel, ib)
+              pval = pval  &
                 + dt * Mij(istep - jstep, ib) * Qij(it_rel, ib)
             end do
 
-          end do 
+            !
+            pval = pval + Mfinal(ib) * Qint(ib)
+
+          end do
+
+          Pi(it, is) = pval 
 
         end do
+        !$omp end do
+        !$omp end parallel
 
         ! Output
         !
@@ -207,6 +252,8 @@
         ! Shift time origin
         !
         if (it == nt_life) then
+
+          Qint(:) = Qint(:) + Qij(0, :) * dt
 
           do jstep = 1, nt_life
             do ib = -nboundary, nboundary
@@ -304,6 +351,7 @@
       ! Deallocate memory
       !
       deallocate(Pi, Qij)
+      deallocate(Qint, Mfinal)
       
     end subroutine reacdyn_tcf 
 !-----------------------------------------------------------------------

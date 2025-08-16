@@ -7,19 +7,16 @@ module mod_ctrl
   use mod_output
   use mod_traj
   use mod_com
+
   implicit none
 
   ! constants
   !
 
-
   ! structures
   !
   type :: s_option
-    integer :: mode      = CoMModeRESIDUE
-    integer :: nparallel = 1
-    real(8) :: dt        = 1.0d0
-    real(8) :: rcut      = 3.5d0
+    integer :: mode(2)    = (/CoMModeWHOLE, CoMModeATOM/)
   end type s_option
 
   ! subroutines
@@ -36,17 +33,17 @@ module mod_ctrl
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_input),    intent(out) :: input
-      type(s_output),   intent(out) :: output
-      type(s_option),   intent(out) :: option
-      type(s_trajopt),  intent(out) :: trajopt
+      type(s_input),   intent(out) :: input
+      type(s_output),  intent(out) :: output
+      type(s_option),  intent(out) :: option
+      type(s_trajopt), intent(out) :: trajopt
 
       ! I/O
       !
-      integer                      :: io
-      character(len=MaxChar)       :: f_ctrl
+      integer                :: io
+      character(len=MaxChar) :: f_ctrl
 
-      ! Get control file name
+      ! get control file name
       !
       call getarg(1, f_ctrl)
 
@@ -68,62 +65,50 @@ module mod_ctrl
 
     end subroutine read_ctrl
 !-----------------------------------------------------------------------
-
+!
 !-----------------------------------------------------------------------
     subroutine read_ctrl_option(io, option)
 !-----------------------------------------------------------------------
       implicit none
 !
-      integer,          intent(in)  :: io
-      type(s_option),   intent(out) :: option 
+      integer,        intent(in)  :: io
+      type(s_option), intent(out) :: option 
 
-      ! Local
-      !
-      character(len=MaxChar) :: mode      = "RESIDUE"
-      integer                :: nparallel = 1
-      real(8)                :: dt        = 1.0d0
-      real(8)                :: rcut      = 3.5d0
+      character(len=MaxChar) :: mode(2)    = (/'RESIDUE', 'RESIDUE'/)
 
-      ! Parser 
+      ! Parser
       !
       integer :: iopt, ierr
 
       ! Dummy
       !
-      integer :: it
-      real(8) :: t 
+      integer :: itraj
 
-      namelist /option_param/ mode,        &
-                              nparallel,   &
-                              dt,          &
-                              rcut
+      namelist /option_param/  &
+        mode
 
 
-      rewind io
+      rewind io 
       read(io, option_param)
 
       write(iw,*)
       write(iw,'(">> Option section parameters")')
-      write(iw,'("mode      = ", a)')     trim(mode)
-      write(iw,'("dt        = ", f15.7)') dt
-      write(iw,'("rcut      = ", f15.7)') rcut 
+      write(iw,'("mode       = ", 2(a,2x))') trim(mode(1)), trim(mode(2))
 
-      ! Get mode
+      ! Parse
       !
-      iopt = get_opt(mode, CoMMode, ierr)
-      if (ierr /= 0) then
-        write(iw,'("Read_Ctrl_Option> Error.")')
-        write(iw,'("mode = ",a," is not available.")') trim(mode)
-        stop
-      end if
-      option%mode      = iopt
+      do itraj = 1, 2
+        iopt = get_opt(mode(itraj), CoMMode, ierr)
+        if (ierr /= 0) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("mode = ",a," is not available.")') trim(mode(itraj))
+          stop
+        end if
+        option%mode(itraj) = iopt
+      end do
 
-      ! Namelist => Option
+      ! Combination check
       !
-      option%nparallel = nparallel
-      option%dt        = dt
-      option%rcut      = rcut
-
 
     end subroutine read_ctrl_option
 !-----------------------------------------------------------------------

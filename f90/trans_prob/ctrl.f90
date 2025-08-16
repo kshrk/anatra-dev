@@ -39,8 +39,6 @@ module mod_ctrl
     integer :: nmol                               = NotSpecified 
     integer :: ndim                               = NotSpecified 
     integer :: nstate                             = NotSpecified
-    integer :: out_id_rij                         = NotSpecified
-    integer :: out_id_kijk                        = NotSpecified 
     integer :: reflection_state_ids(MaxStates)    = NotSpecified 
     integer :: product_state_ids   (MaxStates)    = NotSpecified
     integer :: dissociate_state_ids(MaxStates)    = NotSpecified
@@ -163,8 +161,6 @@ module mod_ctrl
       integer :: nmol                            = NotSpecified
       integer :: ndim                            = NotSpecified
       integer :: nstate                          = NotSpecified
-      integer :: out_id_rij                      = NotSpecified
-      integer :: out_id_kijk                     = NotSpecified
       integer :: reflection_state_ids(MaxStates) = NotSpecified
       integer :: product_state_ids(MaxStates)    = NotSpecified
       integer :: dissociate_state_ids(MaxStates) = NotSpecified
@@ -202,8 +198,6 @@ module mod_ctrl
         nmol,                 &
         ndim,                 &
         nstate,               &
-        out_id_rij,           &
-        out_id_kijk,          &
         reflection_state_ids, &
         product_state_ids,    &
         dissociate_state_ids, &
@@ -239,20 +233,6 @@ module mod_ctrl
       write(iw,'("nmol                 = ", i0)')    nmol
       write(iw,'("ndim                 = ", i0)')    ndim
       write(iw,'("nstate               = ", i0)')    nstate
-
-      if (write_Kijk_bin) then
-        if (out_id_kijk == NotSpecified) then
-          out_id_kijk = 1
-        end if
-        write(iw,'("out_id_kijk          = ", i0)')  out_id_kijk 
-      end if
-
-      if (write_Rij_bin) then
-        if (out_id_rij == NotSpecified) then
-          out_id_rij = 1
-        end if
-        write(iw,'("out_id_rij           = ", i0)')    out_id_rij 
-      end if
 
       write(iw,'("dt                   = ", f20.10)') dt
       write(iw,'("t_sparse             = ", f20.10)') t_sparse
@@ -376,8 +356,6 @@ module mod_ctrl
       option%nmol                 = nmol
       option%ndim                 = ndim
       option%nstate               = nstate
-      option%out_id_rij           = out_id_rij
-      option%out_id_kijk          = out_id_kijk 
 
       option%nreflect             = nreflect
       option%reflection_state_ids = reflection_state_ids

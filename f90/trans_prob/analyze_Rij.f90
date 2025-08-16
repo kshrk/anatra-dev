@@ -44,10 +44,9 @@
         end do
 
         if (option%is_initial(js) .and. it_reac == 0) then
-          return
-          !write(iw,'("Calc_Rij_wo_normalize> Error.")')
-          !write(iw,'("No reaction is observed.")')
-          !stop
+          write(iw,'("Calc_Rij_wo_normalize> Error.")')
+          write(iw,'("No reaction is observed.")')
+          stop
         end if
 
         ! Calc.
@@ -265,6 +264,7 @@
       integer                :: nt_range, nstate
       integer                :: nset 
       character(len=MaxChar) :: fname
+      logical                :: exists
       
       ! Dummy
       !
@@ -321,7 +321,14 @@
           end do
         end do
 
-        write(fname,'(a,i4.4,".rbin")') trim(output%fhead), option%out_id_rij
+        ifile = 0
+        do while (.true.)
+          ifile = ifile + 1
+          write(fname,'(a,i4.4,".rbin")') trim(output%fhead), ifile
+          inquire(file=trim(fname), exist = exists)
+          if (.not. exists) exit 
+        end do
+
         write(iw,'("Write Rij")')
         call open_file(fname, io, frmt = 'unformatted')
         write(io) nset

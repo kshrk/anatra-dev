@@ -125,7 +125,8 @@
           ! (X<---i<---j, X<---j<---i)
           !
           Kijk(:, :, ib)  = 0.0d0
-          Mij(:, ib)      = 0.0d0
+          !Mij(:, ib)      = 0.0d0
+          Mij(:, ib)      = 1.0d0
           Kijk(:, :, -ib) = 0.0d0
           Mij(:, -ib)     = 0.0d0
 

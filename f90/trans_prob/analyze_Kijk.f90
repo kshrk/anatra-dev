@@ -392,6 +392,7 @@
       !
       integer                :: nfile, nselect, nt_range
       character(len=MaxChar) :: fname
+      logical                :: exists
       
       ! Dummy
       !
@@ -445,7 +446,13 @@
       !
       if (option%write_Kijk_bin) then
 
-        write(fname,'(a,i4.4,".kbin")') trim(output%fhead), option%out_id_kijk
+        ifile = 0
+        do while (.true.)
+          ifile = ifile + 1
+          write(fname,'(a,i4.4,".kbin")') trim(output%fhead), ifile 
+          inquire(file=trim(fname), exist = exists)
+          if (.not. exists) exit 
+        end do
 
         call open_file(fname, io, frmt = 'unformatted')
 

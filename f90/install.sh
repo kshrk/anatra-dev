@@ -93,7 +93,9 @@ list="center_of_mass          \
       restricted_radial       \
       potential_of_mean_force \
       interaction_energy      \
-      state_define"
+      rprate_analysis         \
+      state_define            \
+      gauqm_prepper"
 
 cwd=`pwd`
 mkdir -p bin

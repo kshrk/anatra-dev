@@ -59,6 +59,7 @@ proc define_optinfo {} {
   global opt
 
   set opt(fhead)      "out"
+  set opt(nparallel)  1
   set opt(rcut)       3.5 
   set opt(dt)         1.0 
   set opt(mode)       "residue"
@@ -76,6 +77,8 @@ proc read_optinfo {arglist} {
       "-fhead"      "value" $opt(fhead)]
   set opt(mode)       [parse_arguments $arglist \
       "-mode"       "value" $opt(mode)]
+  set opt(nparallel)  [parse_arguments $arglist \
+      "-nparallel"  "value" $opt(nparallel)]
   set opt(rcut)       [parse_arguments $arglist \
       "-rcut"       "value" $opt(rcut)]
   set opt(dt)         [parse_arguments $arglist \
@@ -92,6 +95,7 @@ proc show_optinfo {} {
   puts "<< option info >>"
   puts "fhead      = $opt(fhead)"
   puts "mode       = $opt(mode)"
+  puts "nparallel  = $opt(nparallel)"
   puts "rcut       = $opt(rcut)"
   #puts "dt         = $opt(dt)"
   puts ""
@@ -203,9 +207,10 @@ proc analyze {} {
   puts $f " /"
 
   puts $f " &option_param"
-  puts $f "   mode     = \"$opt(mode)\""
-  puts $f "   dt       = $opt(dt)"
-  puts $f "   rcut     = $opt(rcut)"
+  puts $f "   mode      = \"$opt(mode)\""
+  puts $f "   dt        = $opt(dt)"
+  puts $f "   rcut      = $opt(rcut)"
+  puts $f "   nparallel = $opt(nparallel)"
   puts $f " /"
 
   close $f

@@ -41,28 +41,30 @@ module mod_analyze
       type(s_netcdf)         :: nc 
       type(s_com)            :: com
 
-      integer                :: nmol, natm
+      integer                :: nmol, natm, npar
       integer                :: trajtype
-      logical                :: is_end
+      logical                :: is_end, is_final
       real(8)                :: dvec(3), dsq, rcsq, acc
       character(len=MaxChar) :: fname
 
       ! Dummy
       !
-      integer                :: itraj, imol, jmol, isize, iroot
+      integer                :: itraj, imol, jmol, isize, iroot, istore, jstep
       integer                :: istep, istep_tot
 
       ! Arrays
       !
-      integer, allocatable   :: parent(:)
-      integer, allocatable   :: cluster_size(:)
-      real(8), allocatable   :: distr(:)
+      integer, allocatable   :: parent(:, :)
+      integer, allocatable   :: cluster_size(:, :)
+      real(8), allocatable   :: distr(:), distr_tmp(:)
+      real(8), allocatable   :: crd(:, :, :), box(:, :)
       !real(8), allocatable   ::
 
 
       ! Setup
       !
       rcsq = option%rcut * option%rcut
+      npar = option%nparallel
 
       call get_com(option%mode,          &
                    traj,                 &
@@ -74,13 +76,19 @@ module mod_analyze
 
       ! Allocate
       !
-      allocate(parent(nmol),        &
-               cluster_size(nmol),  &
-               distr(nmol))
+      allocate(parent(nmol, npar),        &
+               cluster_size(nmol, npar),  &
+               distr(nmol),               &
+               distr_tmp(nmol),           &
+               crd(3, nmol, npar),        &
+               box(3, npar))
 
       ! Get trajectory type
       !
       call get_trajtype(input%ftraj(1), trajtype)
+      if (trajtype == TrajTypeXTC) then
+        npar = 1 ! Because the parallel computation is not supported for XTC
+      end if 
 
       ! Start 
       !
@@ -88,6 +96,7 @@ module mod_analyze
       write(iw,'("Analyze> Start")')
       istep_tot = 0
       distr     = 0.0d0
+      istore    = 0
       do itraj = 1, input%ntraj
 
         call open_trajfile(input%ftraj(itraj), trajtype, io, dcd, xtc, nc)
@@ -101,7 +110,7 @@ module mod_analyze
           istep        = istep     + 1
           istep_tot    = istep_tot + 1
 
-          call read_trajfile_oneframe(trajtype, io, istep, dcd, xtc, nc, is_end)
+          call read_trajfile_oneframe(trajtype, io, istep, dcd, xtc, nc, is_end, is_final)
 
           if (is_end) exit
 
@@ -119,41 +128,63 @@ module mod_analyze
                        myrank = 1)
 
 
-          ! Initialize 
-          !
-          do imol = 1, nmol
-            parent(imol) = imol
-          end do
+          istore = istore + 1
+          crd(1:3, 1:nmol, istore) = com%coord(1:3, 1:nmol, 1)
+          box(1:3, istore)         = traj%box(1:3, 1)
 
-          ! Union
-          !
-          do imol = 1, nmol - 1
-            do jmol = imol + 1, nmol
-              dvec(1:3) = com%coord(1:3, imol, 1) - com%coord(1:3, jmol, 1)
-              dvec(1:3) = dvec(1:3) - anint(dvec(1:3)/traj%box(1:3, 1)) * traj%box(1:3, 1)
-              dsq       = dot_product(dvec(1:3), dvec(1:3))
+          if (istore < npar .and. .not. is_final) cycle
 
-              if (dsq <= rcsq) then
-                call union(imol, jmol, parent)
-              end if
+          distr_tmp = 0.0d0
+
+!$omp parallel private(jstep, imol, jmol, dvec, dsq, iroot, isize), & 
+!$omp          default(shared), reduction(+:distr_tmp)
+!$omp do
+          do jstep = 1, istore
+
+            ! Initialize 
+            !
+            do imol = 1, nmol
+              parent(imol, jstep) = imol
+            end do
+            
+            ! Union
+            !
+            do imol = 1, nmol - 1
+              do jmol = imol + 1, nmol
+                !dvec(1:3) = com%coord(1:3, imol, 1) - com%coord(1:3, jmol, 1)
+                !dvec(1:3) = dvec(1:3) - anint(dvec(1:3)/traj%box(1:3, 1)) * traj%box(1:3, 1)
+                dvec(1:3) = crd(1:3, imol, jstep) - crd(1:3, jmol, jstep)
+                dvec(1:3) = dvec(1:3) - anint(dvec(1:3)/box(1:3, jstep)) * box(1:3, jstep)
+                dsq       = dot_product(dvec(1:3), dvec(1:3))
+            
+                if (dsq <= rcsq) then
+                  call union(imol, jmol, parent(:, jstep))
+                end if
+              end do
+            end do
+            
+            ! Find 
+            !
+            do imol = 1, nmol
+              iroot                      = find(imol, parent(:, jstep))
+              cluster_size(iroot, jstep) = cluster_size(iroot, jstep) + 1
+            end do
+            
+            ! Calc. histogram 
+            !
+            do iroot = 1, nmol
+              isize        = cluster_size(iroot, jstep)
+            
+              if (isize == 0) cycle
+              distr_tmp(isize) = distr_tmp(isize) + dble(isize) 
+              !distr_tmp(isize) = distr_tmp(isize) + 1.0d0 
             end do
           end do
+!$omp end do
+!$omp end parallel
 
-          ! Find 
-          !
-          do imol = 1, nmol
-            iroot               = find(imol, parent)
-            cluster_size(iroot) = cluster_size(iroot) + 1
-          end do
-
-          ! Calc. histogram 
-          !
-          do iroot = 1, nmol
-            isize        = cluster_size(iroot)
-
-            if (isize == 0) cycle
-            distr(isize) = distr(isize) + 1.0d0 
-          end do
+          istore = 0 
+          distr  = distr + distr_tmp
 
         end do
 
@@ -165,8 +196,8 @@ module mod_analyze
 
       ! Normalize 
       !
-      !distr(:) = distr(:) / (dble(istep_tot * nmol))
-      distr(:) = distr(:) / (dble(istep_tot))
+      distr(:) = distr(:) / (dble(istep_tot * nmol))
+      !distr(:) = distr(:) / (dble(istep_tot))
       distr(:) = distr(:) / sum(distr(:))
 
       ! Output 

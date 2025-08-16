@@ -46,7 +46,7 @@ exes=("histogram.x"                 \
       "average_function.x"          \
       "bootstrap_prepper.x"         \
       "return_prob.x"               \
-      "rprate_analysis.x"           \
+      "rprate.x"                    \
       "trans_prob.x") 
 
 hlp=("histogram               (hist)   : Histogram Analysis"                         \

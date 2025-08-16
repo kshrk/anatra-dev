@@ -22,7 +22,8 @@ anas=("trjconv"             \
       "z_profile"           \
       "z_orient"            \
       "cluster_size"        \
-      "species_info")
+      "species_info"        \
+      "gauqm_prepper")
 
 anas_abbrev=("trj"   \
 	     "dis"   \
@@ -36,7 +37,8 @@ anas_abbrev=("trj"   \
 	     "zprof" \
 	     "zori"  \
 	     "cls"   \
-	     "spec") 
+	     "spec"  \
+	     "gau")
 
 exes=("trj_convert/tr_convert.tcl"           \
       "distance/analysis.tcl"                \
@@ -50,7 +52,8 @@ exes=("trj_convert/tr_convert.tcl"           \
       "z_profile/analysis.tcl"               \
       "z_orient/analysis.tcl"                \
       "cluster_size/analysis.tcl"            \
-      "species_info/analysis.tcl")
+      "species_info/analysis.tcl"            \
+      "gauqm_prepper/analysis.tcl")
 
 hlp=("trjconv             (trj)   : Convert trajectory"                  \
      "distance            (dis)   : Distance Analysis"                   \
@@ -64,7 +67,8 @@ hlp=("trjconv             (trj)   : Convert trajectory"                  \
      "z_profile           (zprof) : Z-profile Analysis"                  \
      "z_orient            (zori)  : Orientation Analysis along z"        \
      "cluster_size        (cls)   : Cluster-size Analysis"               \
-     "species_info        (spec)  : Get Species information")
+     "species_info        (spec)  : Get Species information"             \
+     "gauqm_prepper       (gau)   : Gaussian QM input prepper")
 
 nanas=${#anas[@]}
 

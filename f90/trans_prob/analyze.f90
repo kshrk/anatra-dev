@@ -143,11 +143,18 @@ module mod_analyze
 
         Rij = 0.0d0
         if (.not. option%read_Rij_bin) then
+
+          !$omp parallel private(ifile) default(shared) reduction(+:Rij)
+          !$omp do
           do ifile = 1, nfile
             call calc_Rij_wo_normalize(option, state(ifile), Rij) 
           end do
+          !$omp end do
+          !$omp end parallel
+
           call normalize_Rij(option, Rij)
         end if
+
         call Rij_bin             (output, option, boundary, Rij)   
         call running_integral_Rij(option, Rij, Rij_int)
         call calc_P0_from_Rij    (option, boundary, Rij, P0)
@@ -164,9 +171,16 @@ module mod_analyze
 
         Kijk       = 0.0d0
         hit_count = 0.0d0
+
+        !$omp parallel private(ifile) default(shared) reduction(+:Kijk) &
+        !$omp          reduction(+:hit_count)
+        !$omp do 
         do ifile = 1, nfile
           call calc_Kijk_wo_normalize(option, boundary, state(ifile), Kijk, hit_count)
         end do
+        !$omp end do
+        !$omp end parallel
+
         call normalize_Kijk(option, boundary, Kijk, hit_count)
 
         if (option%read_Kijk_bin .or. option%write_Kijk_bin) then 
