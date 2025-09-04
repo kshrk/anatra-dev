@@ -140,8 +140,8 @@ module mod_analyze
          
             ! Calculate pair distance
             !
-            call get_dist(1, option%pbc, traj(1)%box(1:3, 1), &
-                          nmol, com, dist)
+            call get_dist(1, option%pbc, option%weight_xyz, &
+                          traj(1)%box(1:3, 1), nmol, com, dist)
          
           else if (option%distance_type == DistanceTypeMINIMUM) then
          
@@ -154,8 +154,8 @@ module mod_analyze
          
             ! Calculate intramolecular distance
             !
-            call get_intradist(1, option%pbc, traj(1)%box(1:3, 1), &
-                               nmol, com, dist)
+            call get_intradist(1, option%pbc, option%weight_xyz, &
+                               traj(1)%box(1:3, 1), nmol, com, dist)
          
           end if
          
@@ -211,12 +211,13 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine get_dist(istep, pbc, box, nmol, com, dist)
+    subroutine get_dist(istep, pbc, weight_xyz, box, nmol, com, dist)
 !-----------------------------------------------------------------------
       implicit none
 
       integer,      intent(in)  :: istep
       logical,      intent(in)  :: pbc
+      real(8),      intent(in)  :: weight_xyz(3)
       real(8),      intent(in)  :: box(3)
       integer,      intent(in)  :: nmol(2)
       type(s_com),  intent(in)  :: com(2)
@@ -239,7 +240,7 @@ module mod_analyze
             d(1:3) = com(2)%coord(1:3, jmol, istep) &
                    - com(1)%coord(1:3, imol, istep)
             d(1:3) = d(1:3) - box(1:3) * nint(d(1:3) / box(1:3))
-
+            d(1:3) = d(1:3) * weight_xyz(1:3)
             dist(jmol, imol)  = sqrt(dot_product(d, d))
           end do
         end do
@@ -249,6 +250,7 @@ module mod_analyze
             d(1:3) = com(2)%coord(1:3, jmol, istep) &
                    - com(1)%coord(1:3, imol, istep)
 
+            d(1:3) = d(1:3) * weight_xyz(1:3)
             dist(jmol, imol) = sqrt(dot_product(d, d))
           end do
         end do
@@ -296,6 +298,7 @@ module mod_analyze
                   d(1:3) = traj(2)%coord(1:3, jatm, istep) &
                          - traj(1)%coord(1:3, iatm, istep)
                   d(1:3) = d(1:3) - box(1:3) * nint(d(1:3) / box(1:3))
+                  d(1:3) = d(1:3) * option%weight_xyz(1:3)
                   r      = sqrt(dot_product(d, d))
          
                   if (r <= dist_min) &
@@ -316,6 +319,7 @@ module mod_analyze
                 d(1:3) = com(2)%coord(1:3, jmol, istep) &
                        - traj(1)%coord(1:3, iatm, istep)
                 d(1:3) = d(1:3) - box(1:3) * nint(d(1:3) / box(1:3))
+                d(1:3) = d(1:3) * option%weight_xyz(1:3)
                 r      = sqrt(dot_product(d, d))
          
                 if (r <= dist_min) &
@@ -336,6 +340,7 @@ module mod_analyze
                 d(1:3) = traj(2)%coord(1:3, jatm, istep) &
                        - com(1)%coord(1:3, imol, istep) 
                 d(1:3) = d(1:3) - box(1:3) * nint(d(1:3) / box(1:3))
+                d(1:3) = d(1:3) * option%weight_xyz(1:3)
                 r      = sqrt(dot_product(d, d))
          
                 if (r <= dist_min) &
@@ -357,6 +362,7 @@ module mod_analyze
                 do jatm = com(2)%molsta(jmol), com(2)%molend(jmol)
                   d(1:3) = traj(2)%coord(1:3, jatm, istep) &
                          - traj(1)%coord(1:3, iatm, istep)
+                  d(1:3) = d(1:3) * option%weight_xyz(1:3)
                   r      = sqrt(dot_product(d, d))
          
                   if (r <= dist_min) &
@@ -375,6 +381,7 @@ module mod_analyze
               do iatm = com(1)%molsta(imol), com(1)%molend(imol)
                 d(1:3) = com(2)%coord(1:3, jmol, istep) &
                        - traj(1)%coord(1:3, iatm, istep)
+                d(1:3) = d(1:3) * option%weight_xyz(1:3)
                 r      = sqrt(dot_product(d, d))
          
                 if (r <= dist_min) &
@@ -400,12 +407,13 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine get_intradist(istep, pbc, box, nmol, com, dist)
+    subroutine get_intradist(istep, pbc, weight_xyz, box, nmol, com, dist)
 !-----------------------------------------------------------------------
       implicit none
 
       integer,      intent(in)  :: istep
       logical,      intent(in)  :: pbc
+      real(8),      intent(in)  :: weight_xyz(3)
       real(8),      intent(in)  :: box(3)
       integer,      intent(in)  :: nmol(2)
       type(s_com),  intent(in)  :: com(2)
@@ -427,6 +435,7 @@ module mod_analyze
           d(1:3) = com(2)%coord(1:3, imol, istep) &
                  - com(1)%coord(1:3, imol, istep)
           d(1:3) = d(1:3) - box(1:3) * nint(d(1:3) / box(1:3))
+          d(1:3) = d(1:3) * weight_xyz(1:3)
 
           dist(imol, imol)  = sqrt(dot_product(d, d))
         end do
@@ -434,6 +443,7 @@ module mod_analyze
         do imol = 1, nmol(1)
           d(1:3) = com(2)%coord(1:3, imol, istep) &
                  - com(1)%coord(1:3, imol, istep)
+          d(1:3) = d(1:3) * weight_xyz(1:3)
 
           dist(imol, imol) = sqrt(dot_product(d, d))
         end do
