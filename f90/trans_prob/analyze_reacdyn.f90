@@ -26,16 +26,19 @@
       integer                :: nstate, nt_range, nt_extend, nboundary
       integer                :: nt_tcfout
       real(8)                :: dt
+      real(8)                :: calc_time_sta, calc_time_end
       character(len=MaxChar) :: fname
+
+      integer                :: thread_id
 
       ! Dummy
       !
-      integer :: is, js, is1, is2, ib, jb, id, istep, jstep, jsta
-      integer :: it, it_rel
-      integer :: js1, js2
+      integer :: is, js, is1, is2, js1, js2
+      integer :: ib, jb, inflx, jnflx, id, istep, jstep, jsta
+      integer :: it, it_kfr, it_mfr, it_rel
       integer :: ncount, nt_life
       real(8) :: psum, pint
-      real(8) :: pval, qval
+      real(8) :: pval, qval, rval
 
       ! Arrays
       !
@@ -43,6 +46,10 @@
       real(8), allocatable :: Pi(:, :)
 
       real(8), allocatable :: Qint(:), Mfinal(:)
+
+      real(8), allocatable :: kfr(:, :, :), mfr(:, :)
+      integer, allocatable :: tind_kfr(:, :, :), tind_mfr(:, :)
+      integer, allocatable :: tind_kfr_final(:, :), tind_mfr_final(:)
 
 
       ! Setup
@@ -87,6 +94,58 @@
       allocate(Pi(0:nt_life, nstate))
       allocate(Qint(-nboundary:nboundary), Mfinal(-nboundary:nboundary))
 
+      allocate(kfr(0:nt_range, nstate, -nboundary:nboundary))
+      allocate(tind_kfr(0:nt_range, nstate, -nboundary:nboundary))
+      allocate(tind_kfr_final(nstate, -nboundary:nboundary))
+      allocate(mfr(0:nt_range, -nboundary:nboundary))
+      allocate(tind_mfr(0:nt_range, -nboundary:nboundary))
+      allocate(tind_mfr_final(-nboundary:nboundary))
+
+      kfr            = 0.0d0
+      tind_kfr       = 0
+      tind_kfr_final = 0
+      mfr            = 0.0d0
+      tind_mfr       = 0
+      tind_mfr_final = 0
+
+      ! Construct kfr
+      !
+      write(iw,'("ReacDyn_TCF> Construct K-matrix")')
+      do ib = -nboundary, nboundary
+        if (ib == 0) cycle
+        is1 = boundary%b2p(1, ib)
+        is2 = boundary%b2p(2, ib)
+        do inflx = 1, boundary%n_influx_boundary(is1)
+          jb    = boundary%influx_boundary(inflx, is1)
+          js    = boundary%b2p(1, jb)
+          jstep = 0
+          do istep = 0, nt_life
+            if (Kijk(istep, is2, jb) > 1.0d-10) then
+              jstep                    = jstep + 1
+              tind_kfr(jstep, is2, jb) = istep
+              kfr     (jstep, is2, jb) = Kijk(istep, is2, jb)
+            end if
+          end do
+          tind_kfr_final(is2, jb) = jstep
+          write(iw,'(4i8)') is2, is1, js, jstep 
+        end do 
+      end do
+
+      ! Construct mfr 
+      !
+      do ib = -nboundary, nboundary
+        if (ib == 0) cycle
+        jstep = 0
+        do istep = 0, nt_life
+          if (abs(Mij(istep, ib)) > 1.0d-10) then
+            jstep               = jstep + 1
+            tind_mfr(jstep, ib) = istep
+            mfr     (jstep, ib) = Mij(istep, ib)
+          end if
+        end do
+        tind_mfr_final(ib) = jstep
+      end do
+
       ! Propagation
       !
       write(fname,'(a,".tcf")') trim(output%fhead)
@@ -104,18 +163,27 @@
       Qint      = 0.0d0
       Mfinal(:) = Mij(nt_range, :) 
 
-      it = -1 
+      calc_time_sta = omp_get_wtime()
+
+
+      !$omp parallel private(istep, jstep, it, ib, jb, is, is1, is2, js1, js2, &
+      !$omp                  inflx, jsta, it_kfr, it_mfr, it_rel, qval, pval, rval, psum)  &
+      !$omp          default(shared) 
+
+      it = -1
       do istep = 0, nt_extend
         it = it + 1
 
+        !$omp single
         if (mod(istep, 1000) == 0) then
+        !if (mod(istep, 1) == 0) then
           write(iw,'("Step: ", i20, " Time: ", f20.10)') istep, istep * dt
-        end if 
+        end if
+        !$omp end single 
 
         ! Calc. Q
         !
-        !$omp parallel private(ib, jb, is1, is2, js1, js2, jsta, jstep, it_rel, qval) default(shared)
-        !$omp          do 
+        !$omp do schedule(dynamic) 
         do ib = -nboundary, nboundary
 
           qval = 0.0d0
@@ -129,7 +197,6 @@
           is2  = boundary%b2p(2, ib)
 
           if (istep <= nt_range .and. option%is_initial(is1)) then
-            !Qij(it, ib) = Qij(it, ib) + Rij(it, is2, is1)
             qval = qval + Rij(it, is2, is1)
           end if
 
@@ -142,30 +209,39 @@
               end if
             end if
             cycle
-          end if 
+          end if
 
-          do jb = -nboundary, nboundary
-
-            if (jb == 0) cycle
-
+          !if (istep == 0) cycle
+          do inflx = 1, boundary%n_influx_boundary(is1)
+            jb  = boundary%influx_boundary(inflx, is1)
             js1 = boundary%b2p(1, jb)
             js2 = boundary%b2p(2, jb)
 
-            if (js2 /= is1) cycle
+            ! Simple but slow algorithm 
+            ! >> Please use this part only for validation 
+            !jsta   = istep - nt_life
+            !it_rel = - 1 
+            !do jstep = max(0, jsta), istep - 1
+            !  it_rel = it_rel + 1
+            !  qval   = qval + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
+            !end do
 
-            jsta   = istep - nt_life
-            it_rel = - 1 
-            do jstep = max(0, jsta), istep - 1
-              it_rel     = it_rel + 1
-              !Qij(it, ib) = Qij(it, ib)  &
-              !  + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
-              qval = qval + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
-            end do 
+            ! Complicated but fast algorithm 
+            !
+            jsta = max(0, istep - nt_life)
+            rval = 0.0d0
+            do it_kfr = 1, tind_kfr_final(is2, jb)
+              jstep  = tind_kfr(it_kfr, is2, jb)
+              it_rel = istep - jstep - jsta
+              if (it_rel < 0) exit 
+              !if (it_rel < 0) cycle 
+              !qval = qval + dt * Kijk(jstep, is2, jb) * Qij(it_rel, jb) 
+              rval = rval + dt * kfr(it_kfr, is2, jb) * Qij(it_rel, jb) 
+            end do
+            qval = qval + rval
 
           end do
-
           Qij(it, ib) = qval
-
           if (option%use_reflection_state) then
             if (boundary%conv_direc(ib)) then
               Qij(it, -ib) = Qij(it, ib)
@@ -175,17 +251,15 @@
 
         end do  ! ib
         !$omp end do
-        !$omp end parallel
+        !$omp barrier
 
         ! Calc. P
         !
-        !$omp parallel private(is, js, ib, jsta, it_rel, jstep, pval) default(shared)
-        !$omp do 
+        !$omp do schedule(dynamic)
         do is = 1, nstate
 
           pval = 0.0d0
           if (istep <= nt_range .and. option%is_initial(is)) then
-            !Pi(it, is) = Pi(it, is) + P0(it, is)
             pval = pval + P0(it, is)
           end if
 
@@ -194,34 +268,47 @@
             cycle
           end if
 
-          do js = 1, nstate
+          !if (istep == 0) cycle
 
-            ib    = boundary%p2b(is, js)
-            if (ib == 0) cycle
+          do inflx = 1, boundary%n_influx_boundary(is)
+            ib = boundary%influx_boundary(inflx, is)
 
-            jsta   = istep - nt_life !- 1
-            it_rel = - 1
-            do jstep = max(0, jsta), istep - 1
-              it_rel = it_rel + 1
-              !Pi(it, is) = Pi(it, is)  &
-              !  + dt * Mij(istep - jstep, ib) * Qij(it_rel, ib)
-              pval = pval  &
-                + dt * Mij(istep - jstep, ib) * Qij(it_rel, ib)
+            ! Simple but slow algorithm 
+            ! >> Please use this part only for validation
+            !
+            !jsta   = istep - nt_life
+            !it_rel = - 1 
+            !jsta   = istep - nt_life !- 1
+            !it_rel = - 1
+            !do jstep = max(0, jsta), istep - 1
+            !  it_rel = it_rel + 1
+            !  pval   = pval  &
+            !    + dt * Mij(istep - jstep, ib) * Qij(it_rel, ib)
+            !end do
+
+            ! Complicated but fast algorithm 
+            !
+            jsta = max(0, istep - nt_life)
+            rval = 0.0d0
+            do it_mfr = 2, tind_mfr_final(ib)
+              jstep  = tind_mfr(it_mfr, ib)
+              it_rel = istep - jstep - jsta
+              !if (it_rel < 0) exit
+              if (it_rel < 0) cycle 
+              rval = rval + dt * mfr(it_mfr, ib) * Qij(it_rel, ib)
             end do
 
-            !
+            pval = pval + rval
             pval = pval + Mfinal(ib) * Qint(ib)
-
           end do
-
-          Pi(it, is) = pval 
-
+          Pi(it, is) = pval
         end do
         !$omp end do
-        !$omp end parallel
+        !$omp barrier
 
         ! Output
         !
+        !$omp single
         psum = 0.0d0
         do is = 1, nstate
           if (option%is_initial(is)) then
@@ -255,98 +342,36 @@
 
           Qint(:) = Qint(:) + Qij(0, :) * dt
 
-          do jstep = 1, nt_life
-            do ib = -nboundary, nboundary
-              if (ib == 0) cycle
-              Qij(jstep - 1, ib) = Qij(jstep, ib) 
-            end do
+          do ib = -nboundary, nboundary
+            if (ib == 0) cycle
+            Qij(1:nt_life - 1, ib) = Qij(2:nt_life, ib) 
+          end do
 
-            do is = 1, nstate
-              Pi(jstep - 1, is) = Pi(jstep, is)
-            end do
+          do is = 1, nstate
+            Pi(1:nt_life - 1, is) = Pi(2:nt_life, is)
           end do
 
           Qij(nt_life, :) = 0.0d0
           Pi(nt_life, :) = 0.0d0
 
-          it = it - 1
+          !it = it - 1
 
+        end if
+        !$omp end single
+
+        if (it == nt_life) then
+          it = it - 1
         end if 
 
       end do    ! istep
+      !$omp end parallel
+
+      calc_time_end = omp_get_wtime()
+      write(iw,'("Calculation time (sec): ", f15.7)') calc_time_end - calc_time_sta
 
       close(io)
       close(io_q)
       close(io_p) 
-
-!
-!      ! Propagating P
-!      !
-!      Pi = 0.0d0
-!      do is = 1, nstate
-!        !if (.not. option%is_initial(is)) cycle
-!
-!        do istep = 0, nt_extend
-!
-!          if (option%is_initial(is)) then 
-!            Pi(istep, is) = Pi(istep, is) + ZP(nt_range, istep, P0(:, is))
-!          end if
-!
-!          if (istep == 0) cycle
-!
-!          do js = 1, nstate
-!            ib = boundary%p2b(is, js)
-!
-!            if (ib == 0) cycle
-!           
-!            jsta = istep - nt_life - 1 
-!            !do jstep = 0, istep - 1
-!            do jstep = max(0, jsta), istep - 1
-!              Pi(istep, is) = Pi(istep, is)                   &
-!                + dt * ZP(nt_range, istep - jstep, Mij(:, ib)) &
-!                     * Qb(jstep, ib)
-!            end do 
-!
-!          end do
-!            
-!        end do
-!      end do
-!
-!      !open(99, file = 'out.q')
-!      !do istep = 0, nt_extend
-!      !  write(99,'(f20.10)', advance = 'no') dt * istep
-!
-!      !  do ib = -nboundary, nboundary
-!      !    if (ib == 0) cycle 
-!      !    write(99,'(f20.10)', advance = 'no') Qb(istep, ib)
-!      !  end do
-!      !  write(99,*)
-!      !end do
-!      !close(99) 
-!
-!      open(99, file = 'out.tcf')
-!
-!      pint = 0.0d0
-!      do istep = 0, nt_extend
-!        !write(99,'(f20.10)', advance = 'no') dt * istep
-!
-!        psum = 0.d0
-!        do is = 1, nstate
-!          if (option%is_initial(is)) then
-!            psum = psum + Pi(istep, is)
-!          end if
-!        end do
-!        pint = pint + psum * dt
-!
-!        write(99,'(3f20.10)') dt * istep, psum, pint
-!        !do is = 1, nstate
-!        !  !if (option%is_initial(is)) then
-!        !    write(99,'(f20.10)', advance = 'no') Pi(istep, is)
-!        !  !end if
-!        !end do
-!        !write(99,*)
-!      end do
-!      close(99) 
 
       ! Deallocate memory
       !

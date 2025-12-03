@@ -40,7 +40,7 @@ module mod_analyze
 
       ! Local
       !
-      integer :: natm, nmol(2)
+      integer :: natm, nmol(2), stride
       integer :: trajtype
       real(8) :: m, d2, d(3), ti, tj
       logical :: is_end
@@ -87,6 +87,12 @@ module mod_analyze
       !
       call get_trajtype(input%ftraj(1), trajtype)
 
+      stride = option%stride
+      if (trajtype /= TrajTypeNCD .and. stride /= 1) then
+        write(iw,'("Analyze> Error. stride /= 1 is supported only for netcdf.")')
+        stop
+      end if
+
       write(iw,*)
       write(iw,'("Analyze> Start")')
 
@@ -103,7 +109,8 @@ module mod_analyze
           istep     = istep     + 1
           istep_tot = istep_tot + 1
 
-          if (mod(istep_tot, 1) == 100) then
+          if (mod(istep_tot, stride) /= 0) cycle
+          if (mod(istep_tot, 100) == 0) then
             write(iw,'("Progress: ",i0)') istep_tot
           end if
 
@@ -119,7 +126,7 @@ module mod_analyze
           end if
 
           if (ti >= option%t_sta .and. ti <= option%t_end) then
-            istep_use = istep_use + 1
+            istep_use = istep_use + stride 
           else
             cycle  
           end if

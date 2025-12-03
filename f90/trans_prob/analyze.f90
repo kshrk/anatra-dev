@@ -18,7 +18,8 @@ module mod_analyze
   type :: s_state
     integer :: nmol
     integer :: nstep
-    integer, allocatable :: data(:, :) ! (nstep, nmol) 
+    integer, allocatable :: data(:, :) ! (nstep, nmol)
+    integer, allocatable :: init_id(:) 
   end type s_state
 
   type :: s_boundary
@@ -26,6 +27,8 @@ module mod_analyze
     logical, allocatable :: is_connected(:, :)
     integer, allocatable :: p2b(:, :)  ! pair        => boundary id
     integer, allocatable :: b2p(:, :)  ! boundary id => pair
+    integer, allocatable :: n_influx_boundary(:)
+    integer, allocatable :: influx_boundary(:, :)
     logical, allocatable :: conv_direc(:)
   end type s_boundary
 
@@ -45,14 +48,15 @@ module mod_analyze
 
   contains
 !-----------------------------------------------------------------------
-    subroutine analyze(input, output, option, timegrid)
+    subroutine analyze(input, einput, output, option, timegrid)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_input),    intent(in)    :: input
-      type(s_output),   intent(in)    :: output
-      type(s_option),   intent(in)    :: option
-      type(s_timegrid), intent(in)    :: timegrid 
+      type(s_input),       intent(in)    :: input
+      type(s_extra_input), intent(in)    :: einput
+      type(s_output),      intent(in)    :: output
+      type(s_option),      intent(in)    :: option
+      type(s_timegrid),    intent(in)    :: timegrid 
 
       ! I/O
       !
@@ -96,10 +100,20 @@ module mod_analyze
       write(iw,*)
       write(iw,'("Analyze> Read CV file")')
       do ifile = 1, nfile 
+        write(iw,'(2x,a)') trim(input%fcv(ifile))
         call read_cv  (input%fcv(ifile), ndim, cv(ifile))
         call get_state(option, cv(ifile), state(ifile))
       end do
       write(iw,'(">> Done")')
+
+      ! Read init_id file
+      !
+      if (option%read_init_id) then 
+        write(iw,*)
+        write(iw,'("Analyze> Read f_init_id file")')
+        write(iw,'("Note: init_id info. is used only if read_init_id = .true.")')
+        call read_f_init_id(option, nfile, state)
+      end if
 
       ! Check state connectivity
       !
@@ -172,16 +186,20 @@ module mod_analyze
         Kijk       = 0.0d0
         hit_count = 0.0d0
 
-        !$omp parallel private(ifile) default(shared) reduction(+:Kijk) &
-        !$omp          reduction(+:hit_count)
-        !$omp do 
-        do ifile = 1, nfile
-          call calc_Kijk_wo_normalize(option, boundary, state(ifile), Kijk, hit_count)
-        end do
-        !$omp end do
-        !$omp end parallel
+        !if (.not. option%read_Kijk_bin) then
 
-        call normalize_Kijk(option, boundary, Kijk, hit_count)
+          !$omp parallel private(ifile) default(shared) reduction(+:Kijk) &
+          !$omp          reduction(+:hit_count)
+          !$omp do 
+          do ifile = 1, nfile
+            call calc_Kijk_wo_normalize(option, boundary, state(ifile), Kijk, hit_count)
+          end do
+          !$omp end do
+          !$omp end parallel
+         
+          call normalize_Kijk(option, boundary, Kijk, hit_count)
+
+        !end if
 
         if (option%read_Kijk_bin .or. option%write_Kijk_bin) then 
           call Kijk_bin    (output, option, boundary, Kijk)
@@ -298,6 +316,42 @@ module mod_analyze
       end do 
 
     end subroutine get_state
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine read_f_init_id(option, nfile, state)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option),   intent(in)    :: option
+      integer,          intent(in)    :: nfile 
+      type(s_state),    intent(inout) :: state(nfile)
+
+      ! I/O
+      !
+      integer :: io
+
+      ! Dummy
+      !
+      integer :: ifile, imol
+
+
+      ! Allocate
+      !
+      do ifile = 1, nfile
+        allocate(state(ifile)%init_id(option%nmol))
+      end do
+
+      ! Read
+      !
+      call open_file(option%f_init_id, io, stat = 'old')
+      do ifile = 1, nfile
+        read(io,*) (state(ifile)%init_id(imol), imol = 1, option%nmol)
+      end do
+      close(io)
+      
+!
+    end subroutine read_f_init_id 
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
@@ -419,7 +473,7 @@ module mod_analyze
 
       ! Dummy
       !
-      integer :: is, js 
+      integer :: is, js, ib, ic 
 
 
       ! Setup
@@ -456,6 +510,26 @@ module mod_analyze
             boundary%b2p(2, -nboundary) = js
           end if
         end do
+      end do
+
+      ! Setup influx_boundary
+      !
+      nboundary = boundary%nboundary
+
+      allocate(boundary%n_influx_boundary(nstate))
+      allocate(boundary%influx_boundary(2*nboundary, nstate))
+
+      do is = 1, nstate
+        ic = 0
+        do ib = -nboundary, nboundary
+          if (ib == 0) cycle
+          js = boundary%b2p(2, ib)
+          if (js == is) then
+            ic = ic + 1
+            boundary%influx_boundary(ic, is) = ib 
+          end if
+        end do
+        boundary%n_influx_boundary(is) = ic
       end do
 
     end subroutine define_boundary 

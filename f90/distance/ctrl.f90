@@ -34,6 +34,7 @@ module mod_ctrl
     real(8) :: weight_xyz(3)   = (/1.0d0, 1.0d0, 1.0d0/)
     real(8) :: t_sta           = 0.0d0
     real(8) :: t_end           = 0.0d0
+    integer :: stride          = 1
   end type s_option
 
   ! subroutines
@@ -89,6 +90,7 @@ module mod_ctrl
       real(8)                :: weight_xyz(3)
       real(8)                :: t_sta
       real(8)                :: t_end
+      integer                :: stride
 
       ! Parser
       !
@@ -105,7 +107,8 @@ module mod_ctrl
         mindist_type,         &
         weight_xyz,           &
         t_sta,                &
-        t_end 
+        t_end,                &
+        stride 
 
 
       ! Initialize
@@ -117,6 +120,7 @@ module mod_ctrl
       weight_xyz    = (/1.0d0, 1.0d0, 1.0d0/)
       t_sta         = 0.0d0
       t_end         = 0.0d0
+      stride        = 1
 
 
       ! Read namelist
@@ -186,6 +190,7 @@ module mod_ctrl
       option%weight_xyz = weight_xyz
       option%t_sta      = t_sta
       option%t_end      = t_end
+      option%stride     = stride
 
       ! Combination check
       !

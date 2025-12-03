@@ -6,20 +6,21 @@ program main
   use mod_analyze
   use mod_bootstrap
 
-  type(s_input)    :: input
-  type(s_output)   :: output
-  type(s_option)   :: option 
-  type(s_bootopt)  :: bootopt
-  type(s_timegrid) :: timegrid 
+  type(s_input)       :: input
+  type(s_extra_input) :: einput
+  type(s_output)      :: output
+  type(s_option)      :: option 
+  type(s_bootopt)     :: bootopt
+  type(s_timegrid)    :: timegrid 
 
   call show_title
   call show_usage
-  call read_ctrl(input, output, option, bootopt, timegrid)
+  call read_ctrl(input, einput, output, option, bootopt, timegrid)
 
   if (option%use_bootstrap) then
     !call analyze_bootstrap(input, output, option, bootopt)
   else
-    call analyze(input, output, option, timegrid)
+    call analyze(input, einput, output, option, timegrid)
   end if
 
   call termination("Transition Probability Analysis")

@@ -11,21 +11,21 @@ chk_gfort := $(shell which gfortran >/dev/null 2>&1 && echo 1 || echo 0)
 
 
 ifeq ($(FC),ifort)
-	FFLAGS = -qopenmp
+	FFLAGS = -qopenmp -mkl
 else ifeq ($(FC),ifx)
-	FFLAGS = -qopenmp
+	FFLAGS = -qopenmp -mkl
 else ifeq ($(FC),gfortran)
 	FFLAGS = -fopenmp
 else
 	ifeq ($(chk_ifort),1)
 		FC     = ifort
-		FFLAGS = -qopenmp
+		FFLAGS = -qopenmp -mkl
 	else ifeq ($(chk_ifx),1)
 		FC     = ifx
-		FFLAGS = -qopenmp
+		FFLAGS = -qopenmp -mkl
 	else ifeq ($(chk_gfort),1)
 		FC     = gfortran
-		FFLAGS = -fopenmp 
+		FFLAGS = -fopenmp
 	endif
 endif
 

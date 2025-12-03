@@ -26,7 +26,9 @@ module mod_ctrl
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
+    logical :: use_single_event     = .false. 
     logical :: read_connectivity    = .false.
+    logical :: read_init_id         = .false.
     logical :: write_Rij_bin        = .false. 
     logical :: read_Rij_bin         = .false.
     logical :: write_Kijk_bin       = .false.
@@ -44,6 +46,10 @@ module mod_ctrl
     integer :: dissociate_state_ids(MaxStates)    = NotSpecified
     integer :: initial_state_ids   (MaxStates)    = NotSpecified
     integer :: sel_ijk             (3, MaxStates) = NotSpecified
+
+    ! File names 
+    !
+    character(len=MaxChar) :: f_init_id  = ''
 
     ! for time scale definition
     !
@@ -77,6 +83,13 @@ module mod_ctrl
 
   end type s_option
 
+  type s_extra_input
+    character(len=MaxChar) :: f_connect   = ''
+    character(len=MaxChar) :: f_init_d    = ''
+    character(len=MaxChar) :: f_rbin_head = ''
+    character(len=MaxChar) :: f_kbin_head = ''
+  end type s_extra_input
+
   type :: s_timegrid
     integer :: ng
     real(8), allocatable :: val(:)
@@ -94,15 +107,16 @@ module mod_ctrl
   contains
 
 !-----------------------------------------------------------------------
-    subroutine read_ctrl(input, output, option, bootopt, timegrid)
+    subroutine read_ctrl(input, einput, output, option, bootopt, timegrid)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_input),    intent(out) :: input
-      type(s_output),   intent(out) :: output
-      type(s_option),   intent(out) :: option 
-      type(s_bootopt),  intent(out) :: bootopt 
-      type(s_timegrid), intent(out) :: timegrid 
+      type(s_input),       intent(out) :: input
+      type(s_extra_input), intent(out) :: einput
+      type(s_output),      intent(out) :: output
+      type(s_option),      intent(out) :: option 
+      type(s_bootopt),     intent(out) :: bootopt 
+      type(s_timegrid),    intent(out) :: timegrid 
 
       ! I/O
       !
@@ -122,6 +136,16 @@ module mod_ctrl
       call read_ctrl_output (io, output)
       call show_output      (output)
       call read_ctrl_option (io, option, timegrid)
+
+      if (option%read_connectivity .or.  &
+          option%read_init_id      .or.  &
+          option%read_Rij_bin      .or.  &
+          option%read_Kijk_bin) then
+
+        !call read_ctrl_extra_input(
+
+      end if
+
       call read_ctrl_state  (io, option)
 
       if (option%use_bootstrap) then
@@ -148,7 +172,9 @@ module mod_ctrl
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
+      logical :: use_single_event     = .false.
       logical :: read_connectivity    = .false.
+      logical :: read_init_id         = .false.
       logical :: write_Kijk_bin       = .false.
       logical :: read_Kijk_bin        = .false.
       logical :: write_Rij_bin        = .false. 
@@ -156,7 +182,8 @@ module mod_ctrl
       logical :: extrapolate          = .false.
       logical :: check_Kijk           = .false.
 
-      character(len=MaxChar) :: kinetic_mode     = 'TRANSITION' 
+      character(len=MaxChar) :: kinetic_mode     = 'TRANSITION'
+      character(len=MaxChar) :: f_init_id        = '' 
       
       integer :: nmol                            = NotSpecified
       integer :: ndim                            = NotSpecified
@@ -187,7 +214,9 @@ module mod_ctrl
         use_reflection_state, &
         use_product_state,    &
         use_dissociate_state, &
+        use_single_event,     &
         read_connectivity,    &
+        read_init_id,         &
         write_Kijk_bin,       &
         read_Kijk_bin,        &
         write_Rij_bin,        &
@@ -195,6 +224,7 @@ module mod_ctrl
         extrapolate,          &
         check_Kijk,           &
         kinetic_mode,         &
+        f_init_id,            &
         nmol,                 &
         ndim,                 &
         nstate,               &
@@ -221,12 +251,15 @@ module mod_ctrl
         write(iw,'("use_reflection_state = ", a)')   get_tof(use_reflection_state)
         write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
         write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
+        write(iw,'("use_single_event     = ", a)')   get_tof(use_single_event)
         write(iw,'("read_connectivity    = ", a)')   get_tof(read_connectivity)
+        write(iw,'("read_init_id         = ", a)')   get_tof(read_init_id)
         write(iw,'("write_Kijk_bin       = ", a)')   get_tof(write_Kijk_bin)
         write(iw,'("read_Kijk_bin        = ", a)')   get_tof(read_Kijk_bin)
         write(iw,'("write_Rij_bin        = ", a)')   get_tof(write_Rij_bin)
         write(iw,'("read_Rij_bin         = ", a)')   get_tof(read_Rij_bin)
         write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
+        write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
       end if
 
       write(iw,'("extrapolate          = ", a)')     get_tof(extrapolate)
@@ -346,13 +379,18 @@ module mod_ctrl
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
+      option%use_single_event     = use_single_event
       option%read_connectivity    = read_connectivity
+      option%read_init_id         = read_init_id
       option%write_Kijk_bin       = write_Kijk_bin
       option%read_Kijk_bin        = read_Kijk_bin
       option%write_Rij_bin        = write_Rij_bin
       option%read_Rij_bin         = read_Rij_bin
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
+
+      option%f_init_id            = f_init_id
+
       option%nmol                 = nmol
       option%ndim                 = ndim
       option%nstate               = nstate

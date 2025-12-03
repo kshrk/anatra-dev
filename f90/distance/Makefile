@@ -52,7 +52,7 @@ OBJ=$(XDRINTERFACE)/xdr.F90 \
     $(HOME)/main.f90
 
 $(TRGT) : $(OBJ) 
-	$(FC) $(FFLAGS) -o $(EXEF) $(OBJ) -L $(XDRLIB) -lxdrfile -L $(NCLIB) -I $(NCINC) -lnetcdf -lnetcdff
+	$(FC) $(FFLAGS) -o $(EXEF) $(OBJ) -L $(XDRLIB) -lxdrfile -L $(NCLIB) -I $(NCINC) -lnetcdf -lnetcdff -Wl,-rpath,$(NCLIB)
 	mkdir -p ../bin
 	cp $(EXEF) ../bin/
 	rm -f *.mod

@@ -88,6 +88,7 @@ proc define_optinfo {} {
   set opt(t_sta)          0.0
   set opt(t_end)          0.0
   set opt(pbc)            false
+  set opt(stride)         1
   set opt(distance_type)  "standard" 
   set opt(mindist_type0)  "site" 
   set opt(mindist_type1)  "site" 
@@ -117,6 +118,8 @@ proc read_optinfo {arglist} {
       "-dt"            "value" $opt(dt)]
   set opt(pbc)           [parse_arguments $arglist \
       "-pbc"           "value" $opt(pbc)]
+  set opt(stride)        [parse_arguments $arglist \
+      "-stride"        "value" $opt(stride)]
   set opt(distance_type) [parse_arguments $arglist \
       "-distance_type" "value" $opt(distance_type)]
   set opt(mindist_type0) [parse_arguments $arglist \
@@ -143,6 +146,7 @@ proc show_optinfo {} {
   puts "t_sta          = $opt(t_sta)"
   puts "t_end          = $opt(t_end)"
   puts "pbc            = $opt(pbc)"
+  puts "stride         = $opt(stride)"
   puts "distance_type  = $opt(distance_type)"
   puts "mindist_type0  = $opt(mindist_type0)"
   puts "mindist_type1  = $opt(mindist_type1)"
@@ -271,6 +275,7 @@ proc analyze {} {
   puts $f "   weight_xyz     = $opt(weight_xyz)"
   puts $f "   t_sta          = $opt(t_sta)"
   puts $f "   t_end          = $opt(t_end)"
+  puts $f "   stride         = $opt(stride)"
   puts $f " /"
   close $f
 

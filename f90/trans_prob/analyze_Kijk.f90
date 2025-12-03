@@ -16,13 +16,14 @@
       ! Local
       !
       integer :: nmol, nstep, nt_range, nt_sparse, nboundary
+      integer :: init_id
       real(8) :: dt
-      logical :: is_final
+      logical :: is_final, use_single_event
 
       ! Dummy 
       !
       integer :: istep, jstep, imol
-      integer :: is, js, ib
+      integer :: is, js, ks, ls, ib, jb
       integer :: it, it_reac, it_diff, nt
       integer :: ista, iend, ireac
       integer :: iprod, idissoc
@@ -30,18 +31,26 @@
 
       ! Setup
       !
-      nmol      = option%nmol
-      nstep     = state%nstep
-      nt_range  = option%nt_range
-      nt_sparse = option%nt_sparse
-      nboundary = boundary%nboundary
-      dt        = option%dt_out
+      nmol             = option%nmol
+      nstep            = state%nstep
+      nt_range         = option%nt_range
+      nt_sparse        = option%nt_sparse
+      nboundary        = boundary%nboundary
+      dt               = option%dt_out
+      use_single_event = option%use_single_event
 
       do imol = 1, nmol
 
         ! Search reaction time
         !
         js       = state%data(1, imol)
+
+        if (allocated(state%init_id)) then
+          init_id  = state%init_id(imol) 
+        else
+          init_id  = js
+        end if
+
         ireac    = 0
         is_final = .false. 
         do istep = nt_sparse + 1, nstep, nt_sparse
@@ -60,14 +69,23 @@
               it_diff               = int(it_diff / dble(nt_sparse))
               Kijk(it_diff, is, ib) = Kijk(it_diff, is, ib) + 1.0d0
 
+              jb                    = ib
               ib                    = boundary%p2b(is, js)
               hit_count(ib)         = hit_count(ib) + 1.0d0
-                                    
+
               ista                  = istep - nt_sparse 
               js                    = is
 
               if (istep == nstep) then
                 is_final = .true.
+              end if
+
+              if (use_single_event) then
+                ks = boundary%b2p(1, jb)
+                if (ks /= init_id) then
+                  Kijk(it_diff, is, jb) = Kijk(it_diff, is, jb) - 1.0d0
+                  hit_count(jb)         = hit_count(jb)         - 1.0d0
+                end if
               end if
 
             end if
@@ -219,7 +237,13 @@
               state_sum = state_sum + Kijk(istep, js, ib)
             end do
           end do
-          Kijk(:, :, ib) = Kijk(:, :, ib) / (state_sum * dt)
+
+          if (state_sum > 1.0d-10) then
+            Kijk(:, :, ib) = Kijk(:, :, ib) / (state_sum * dt)
+          else
+            Kijk(:, :, ib) = 0.0d0
+          end if 
+
         end if
 
       end do
@@ -391,12 +415,14 @@
       ! Local
       !
       integer                :: nfile, nselect, nt_range
+      integer                :: ncount, nboundary
       character(len=MaxChar) :: fname
       logical                :: exists
       
       ! Dummy
       !
-      integer :: ifile, i, j, k, ib, isel, jsel
+      integer :: ifile, i, j, k, ib, jb, isel, jsel
+      integer :: is, js, is1, is2, js1, js2 
 
       ! Arrays
       !
@@ -405,8 +431,9 @@
 
       ! Setup
       ! 
-      nselect  = option%nselect
-      nt_range = option%nt_range
+      nselect   = option%nselect
+      nt_range  = option%nt_range
+      nboundary = boundary%nboundary 
 
       allocate(wrk(0:nt_range))
   
@@ -456,18 +483,63 @@
 
         call open_file(fname, io, frmt = 'unformatted')
 
-        write(io) nselect
+        if (nselect /= 0) then
+          write(io) nselect
+          
+          do isel = 1, nselect
+            i      = option%sel_ijk(1, isel)
+            j      = option%sel_ijk(2, isel)
+            k      = option%sel_ijk(3, isel)
+            ib     = boundary%p2b(j, k)
+            wrk(:) = Kijk(:, i, ib)
+          
+            write(io) i, j, k, wrk
+          
+          end do
+        else
 
-        do isel = 1, nselect
-          i      = option%sel_ijk(1, isel)
-          j      = option%sel_ijk(2, isel)
-          k      = option%sel_ijk(3, isel)
-          ib     = boundary%p2b(j, k)
-          wrk(:) = Kijk(:, i, ib)
+          ! Count # of K-elements 
+          !
+          ncount = 0
+          do ib = -nboundary, nboundary
+            if (ib == 0) cycle
+            is1 = boundary%b2p(1, ib)
+            is2 = boundary%b2p(2, ib)
 
-          write(io) i, j, k, wrk
+            do jb = -nboundary, nboundary
+              if (jb == 0) cycle
 
-        end do 
+              js1 = boundary%b2p(1, jb)
+              js2 = boundary%b2p(2, jb)
+
+              if (js1 /= is2) cycle
+              ncount = ncount + 1
+            end do
+          end do
+
+          ! Write
+          !
+          write(io) ncount 
+
+          do ib = -nboundary, nboundary
+            if (ib == 0) cycle
+            is1 = boundary%b2p(1, ib)
+            is2 = boundary%b2p(2, ib)
+
+            do jb = -nboundary, nboundary
+              if (jb == 0) cycle
+
+              js1 = boundary%b2p(1, jb)
+              js2 = boundary%b2p(2, jb)
+
+              if (js1 /= is2) cycle
+              wrk(:) = Kijk(:, js2, ib)
+
+              write(io) js2, js1, is1, wrk
+            end do
+          end do
+
+        end if
 
         close(io)
       end if
