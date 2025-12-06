@@ -26,11 +26,20 @@ module mod_setup
 
       integer :: itraj
 
+
+      if (input%ftraj(1) == "") then
+        write(iw,'("Setup> Error.")')
+        write(iw,'("ftraj in input_param is empty...")')
+        stop
+      end if
+
       do itraj = 1, 2
-        call read_dcd(input%fdcd(itraj), 0, dcd)
-        call setup_traj(trajopt, dcd, traj(itraj), itraj)
-        call dealloc_dcd(dcd)
+        call setup_traj_from_args(trajopt,      &
+                                  1,            &
+                                  traj(itraj),  &
+                                  trajid = itraj)
       end do
+
 
     end subroutine setup
 

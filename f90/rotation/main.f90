@@ -17,7 +17,7 @@ program main
   call show_title
   call read_ctrl(input, output, option, trajopt)
   call setup(input, trajopt, traj)
-  call analyze(output, option, traj)
+  call analyze(input, output, option, traj)
   call dealloc_traj(traj(1))
   call dealloc_traj(traj(2))
 

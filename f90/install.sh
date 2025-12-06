@@ -80,6 +80,7 @@ list="center_of_mass          \
       lipid_order             \
       z_profile               \
       z_orient                \
+      rotation                \
       radial_distr            \
       spatial_distr           \
       cluster_size            \

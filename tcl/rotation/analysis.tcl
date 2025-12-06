@@ -18,8 +18,8 @@ package require anatra 1.0;list
 
 
 # Loaad sub-programs
-set     fpath "${anatra_path}/tcl/rot_analysis";list
-source  ${fpath}/rot_proc.tcl;list
+set     fpath "${anatra_path}/tcl/rotation";list
+source  ${fpath}/procedures.tcl;list
 
 print_title
 show_rot_usage $argv
@@ -53,9 +53,9 @@ show_selinfo
 puts ""
 puts "\[Step 4\] Read Option parameters"
 puts ""
-define_rotoptinfo
-read_rotoptinfo $argv
-show_rotopt
+define_optinfo
+read_optinfo $argv
+show_opt
 
 puts ""
 puts "\[Step 5 \] Start Analysis"
