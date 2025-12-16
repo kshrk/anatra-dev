@@ -165,7 +165,6 @@
 
       calc_time_sta = omp_get_wtime()
 
-
       !$omp parallel private(istep, jstep, it, ib, jb, is, is1, is2, js1, js2, &
       !$omp                  inflx, jsta, it_kfr, it_mfr, it_rel, qval, pval, rval, psum)  &
       !$omp          default(shared) 
@@ -344,11 +343,11 @@
 
           do ib = -nboundary, nboundary
             if (ib == 0) cycle
-            Qij(1:nt_life - 1, ib) = Qij(2:nt_life, ib) 
+            Qij(0:nt_life - 1, ib) = Qij(1:nt_life, ib) 
           end do
 
           do is = 1, nstate
-            Pi(1:nt_life - 1, is) = Pi(2:nt_life, is)
+            Pi(0:nt_life - 1, is) = Pi(1:nt_life, is)
           end do
 
           Qij(nt_life, :) = 0.0d0

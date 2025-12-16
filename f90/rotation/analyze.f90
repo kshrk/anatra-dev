@@ -144,7 +144,7 @@ module mod_analyze
       tcf    = 0.0d0
       tcfave = 0.0d0
 
-!$omp parallel private(imol, istep, nend, ij, cost) &
+!$omp parallel private(imol, istep, jstep, nend, ij, cost) &
 !$omp        & default(shared)
 !$omp do
       do imol = 1, nmol

@@ -45,8 +45,17 @@
           do js = 1, nstate
             if (.not. boundary%is_connected(js, is2)) cycle
             do jstep = 0, istep - 1
-              Mij(istep, ib) = Mij(istep, ib) - dt * Kijk(jstep, js, ib)  
+              Mij(istep, ib) = Mij(istep, ib) - dt * Kijk(jstep, js, ib) 
             end do
+            if (Mij(istep, ib) < 0.0d0) then
+              if (abs(Mij(istep, ib)) > 1.0d-3) then
+                write(iw,'("Calc_Mij_from_Kijk> Error.")')
+                write(iw,'("Negative population has been detected. stop")')
+                stop
+              else
+                Mij(istep, ib) = 0.0d0
+              end if 
+            end if
           end do
 
         end do
