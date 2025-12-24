@@ -4,25 +4,17 @@ program main
   use mod_const
   use mod_ctrl
   use mod_analyze
-  use mod_bootstrap
 
   type(s_input)       :: input
   type(s_extra_input) :: einput
   type(s_output)      :: output
   type(s_option)      :: option 
-  type(s_bootopt)     :: bootopt
   type(s_timegrid)    :: timegrid 
 
   call show_title
   call show_usage
-  call read_ctrl(input, einput, output, option, bootopt, timegrid)
-
-  if (option%use_bootstrap) then
-    !call analyze_bootstrap(input, output, option, bootopt)
-  else
-    call analyze(input, einput, output, option, timegrid)
-  end if
-
+  call read_ctrl(input, einput, output, option, timegrid)
+  call analyze(input, einput, output, option, timegrid)
   call termination("Transition Probability Analysis")
 
 end program main 
@@ -63,7 +55,6 @@ subroutine show_usage
     write(iw,'(" fhead         = ""filehead""  ! header of output file")')
     write(iw,'("/")')
     write(iw,'("&option_param")')
-    write(iw,'(" use_bootstrap          =  .false.       ! use bootstrap or not")')
     write(iw,'(" use_dissociate_state   =  .false.       ! define dissociate state or not")')
     write(iw,'(" use_reflection_state   =  .false.       ! not implemented")')
     write(iw,'(" use_product_state      =  .false.       ! not implemented")')

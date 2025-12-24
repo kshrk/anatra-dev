@@ -33,12 +33,9 @@ endif
 #
 OBJ=$(LIB)/util.f90      \
     $(LIB)/const.f90     \
-    ${LIB}/mtwist.f90    \
-    ${LIB}/random.f90    \
     $(LIB)/input.f90     \
     $(LIB)/output.f90    \
     $(LIB)/cv.f90        \
-    ${LIB}/bootstrap.f90 \
     $(HOME)/ctrl.f90     \
     $(HOME)/analyze.f90  \
     $(HOME)/main.f90

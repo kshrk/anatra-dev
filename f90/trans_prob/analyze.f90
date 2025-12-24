@@ -7,8 +7,6 @@ module mod_analyze
   use mod_input
   use mod_output
   use mod_ctrl
-  use mod_bootstrap
-  use mod_random
 
   ! constants
   !
@@ -31,16 +29,6 @@ module mod_analyze
     integer, allocatable :: influx_boundary(:, :)
     logical, allocatable :: conv_direc(:)
   end type s_boundary
-
-  type :: s_booteach
-    integer, allocatable :: rand(:, :)
-    real(8), allocatable :: func(:, :)
-  end type s_booteach
-
-  type :: s_bootave
-    real(8), allocatable :: ave(:)
-    real(8), allocatable :: err(:) 
-  end type s_bootave
 
   ! subroutines
   !
@@ -70,6 +58,8 @@ module mod_analyze
       integer :: nboundary
 
       type(s_boundary) :: boundary
+      type(s_cv)       :: cv
+      type(s_state)    :: state
 
       ! Dummy
       !
@@ -77,14 +67,14 @@ module mod_analyze
 
       ! Arrays
       !
-      type(s_cv),    allocatable :: cv(:)
-      type(s_state), allocatable :: state(:)
-
+      integer,       allocatable :: init_id(:)
       real(8),       allocatable :: Rij(:, :, :), Rij_int(:, :, :)
       real(8),       allocatable :: P0(:, :)
 
       real(8),       allocatable :: Kijk(:, :, :), hit_count(:)
       real(8),       allocatable :: Mij(:, :)
+
+      real(8),       allocatable :: Ktmp(:, :, :, :), htmp(:, :)
 
 
       ! Setup
@@ -92,38 +82,66 @@ module mod_analyze
       ndim     = option%ndim * option%nmol 
       nfile    = input%ncv
       nstate   = option%nstate
-      nt_range = option%nt_range  
-      allocate(cv(nfile), state(nfile))
+      nt_range = option%nt_range
 
-      ! Read CV files
+      ! Construct K-, R-, M-, and P0-functions
       !
-      write(iw,*)
-      write(iw,'("Analyze> Read CV file")')
-      do ifile = 1, nfile 
-        write(iw,'(2x,a)') trim(input%fcv(ifile))
-        call read_cv  (input%fcv(ifile), ndim, cv(ifile))
-        call get_state(option, cv(ifile), state(ifile))
-      end do
-      write(iw,'(">> Done")')
+      allocate(Rij(0:nt_range, nstate, nstate))
+      allocate(Ktmp(0:nt_range, nstate, nstate, nstate))
+      allocate(htmp(nstate, nstate))
 
+      Rij  = 0.0d0
+      Ktmp = 0.0d0
+      htmp = 0.0d0
+      
       ! Read init_id file
       !
       if (option%read_init_id) then 
         write(iw,*)
         write(iw,'("Analyze> Read f_init_id file")')
         write(iw,'("Note: init_id info. is used only if read_init_id = .true.")')
-        call read_f_init_id(option, nfile, state)
+        allocate(init_id(option%nmol))
+        call read_f_init_id(option, nfile, init_id)
       end if
 
-      ! Check state connectivity
+      do ifile = 1, nfile
+
+        ! Initialize 
+        !
+        if (allocated(cv%x)) then
+          call deallocate_cv(cv)
+          state%nmol  = 0
+          state%nstep = 0
+          deallocate(state%data)
+        end if
+
+        ! Read CV
+        !
+        write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
+        call read_cv  (input%fcv(ifile), ndim, cv)
+        call get_state(option, cv, state)
+        if (option%read_init_id) then
+          if (.not. allocated(state%init_id)) then
+            allocate(state%init_id(option%nmol))
+          end if
+          state%init_id = init_id
+        end if
+
+        ! Update state connectivity
+        !
+        call get_state_connectivity(output, option, state, boundary)
+
+        ! Update R- and K-functions
+        !
+        call update_Rij_wo_normalize(option, state, Rij)
+        call update_Kijk_wo_normalize(option, state, Ktmp, htmp)
+      end do
+
+      ! Show connectivity
       !
       write(iw,*)
       write(iw,'("Analyze> Get Connectivity")')
-      do ifile = 1, nfile
-        call get_state_connectivity(output, option, state(ifile), boundary)
-      end do
       call show_state_connectivity(option, boundary)
-      write(iw,'(">> Done")')
 
       ! Define boundary
       !
@@ -133,116 +151,57 @@ module mod_analyze
       nboundary = boundary%nboundary
       write(iw,'(">> Done")')
 
-      ! Main part
+      ! Convert arrays
       !
-      if (option%kinetic_mode == KineticModeTransition) then
+      allocate(Kijk(0:nt_range, nstate, -nboundary:nboundary))
+      allocate(hit_count(-nboundary:nboundary))
+      call convert_Kijk_arrays(option, boundary, Ktmp, htmp, Kijk, hit_count)
 
-        ! Not implmented yet
+      ! Normalize R- and K-functions
+      ! 
+      call normalize_Rij(option, Rij)
+      call normalize_Kijk(option, boundary, Kijk, hit_count)
 
+      ! Check Kijk
+      !
+      call check_Kijk(option, boundary, Kijk)
 
-      else if (option%kinetic_mode == KineticModeReaction) then
+      ! Compute R-integration and P0
+      !
+      allocate(Rij_int(0:nt_range, nstate, nstate))
+      allocate(P0     (0:nt_range, nstate))
+      call running_integral_Rij(option, Rij, Rij_int)
+      call calc_P0_from_Rij    (option, boundary, Rij, P0)
 
+      ! Compute Mij
+      !
+      allocate(Mij (0:nt_range, -nboundary:nboundary))
+      call calc_Mij_from_Kijk(option, boundary, Kijk, Mij)
+
+      ! Output
+      !
+      call write_Rij   (output, option, boundary, Rij, Rij_int)
+      call write_P0    (output, option, P0)
+      call write_Kijk  (output, option, boundary, Kijk)
+      call write_Mij   (output, option, boundary, Mij)
+
+      if (option%extrapolate) then
 
         write(iw,*)
-        write(iw,'("Analyze> KineticMode = REACTION")')
-        write(iw,'(">> Calculate Rij(t) and Kijk(t)")')
+        write(iw,'("Analyze> Start propagation")')
 
-        ! Calculate Rij(t) and P0(t)
+        ! Setup Boundary conditions 
         !
-        write(iw,*)
-        write(iw,'("o Rij(t)")')
-        allocate(Rij    (0:nt_range, nstate, nstate))
-        allocate(Rij_int(0:nt_range, nstate, nstate))
-        allocate(P0     (0:nt_range, nstate))
-
-        Rij = 0.0d0
-        if (.not. option%read_Rij_bin) then
-
-          !$omp parallel private(ifile) default(shared) reduction(+:Rij)
-          !$omp do
-          do ifile = 1, nfile
-            call calc_Rij_wo_normalize(option, state(ifile), Rij) 
-          end do
-          !$omp end do
-          !$omp end parallel
-
-          call normalize_Rij(option, Rij)
-        end if
-
-        call Rij_bin             (output, option, boundary, Rij)   
-        call running_integral_Rij(option, Rij, Rij_int)
-        call calc_P0_from_Rij    (option, boundary, Rij, P0)
+        call set_reflection(output, option, boundary, Kijk, Mij)
+        call set_product   (output, option, boundary, Kijk, Mij)
+        
+        ! Extend timescale 
+        !
+        call reacdyn_tcf(output, option, boundary, Rij, P0, Kijk, Mij)
 
         write(iw,'(">> Done")')
 
-        ! Calculate Kijk(t) and Mij(t)
-        !
-        write(iw,*)
-        write(iw,'("o Kijk(t)")')
-        allocate(Kijk(0:nt_range, nstate, -nboundary:nboundary))
-        allocate(Mij (0:nt_range, -nboundary:nboundary))
-        allocate(hit_count(-nboundary:nboundary))
-
-        Kijk       = 0.0d0
-        hit_count = 0.0d0
-
-        !if (.not. option%read_Kijk_bin) then
-
-          !$omp parallel private(ifile) default(shared) reduction(+:Kijk) &
-          !$omp          reduction(+:hit_count)
-          !$omp do 
-          do ifile = 1, nfile
-            call calc_Kijk_wo_normalize(option, boundary, state(ifile), Kijk, hit_count)
-          end do
-          !$omp end do
-          !$omp end parallel
-         
-          call normalize_Kijk(option, boundary, Kijk, hit_count)
-
-        !end if
-
-        if (option%read_Kijk_bin .or. option%write_Kijk_bin) then 
-          call Kijk_bin    (output, option, boundary, Kijk)
-          if (.not. option%write_Kijk_bin) then 
-            call renormalize_Kijk (option, boundary, Kijk)
-          end if
-        end if 
-
-        call calc_Mij_from_Kijk(option, boundary, Kijk, Mij)
-
-        ! Check Kijk
-        !
-        call check_Kijk(option, boundary, Kijk)
-
-        write(iw,'(">> Done")')
-
-        ! Output
-        !
-        call write_Rij   (output, option, boundary, Rij, Rij_int)
-        call write_P0    (output, option, P0)
-        call write_Kijk   (output, option, boundary, Kijk)
-        call write_Mij    (output, option, boundary, Mij)
-
-        if (option%extrapolate) then
-
-          write(iw,*)
-          write(iw,'("Analyze> Start propagation")')
-
-          ! Setup Boundary conditions 
-          !
-          call set_reflection(output, option, boundary, Kijk, Mij)
-          call set_product   (output, option, boundary, Kijk, Mij)
-          
-          ! Extend timescale 
-          !
-          call reacdyn_tcf(output, option, boundary, Rij, P0, Kijk, Mij)
-
-          write(iw,'(">> Done")')
-
-        end if 
-
-      end if
-
+      end if 
 
     end subroutine analyze
 !-----------------------------------------------------------------------
@@ -319,13 +278,13 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine read_f_init_id(option, nfile, state)
+    subroutine read_f_init_id(option, nfile, init_id)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_option),   intent(in)    :: option
-      integer,          intent(in)    :: nfile 
-      type(s_state),    intent(inout) :: state(nfile)
+      type(s_option), intent(in)    :: option
+      integer,        intent(in)    :: nfile 
+      integer,        intent(inout) :: init_id(option%nmol)
 
       ! I/O
       !
@@ -338,15 +297,13 @@ module mod_analyze
 
       ! Allocate
       !
-      do ifile = 1, nfile
-        allocate(state(ifile)%init_id(option%nmol))
-      end do
+      init_id = 0
 
       ! Read
       !
       call open_file(option%f_init_id, io, stat = 'old')
       do ifile = 1, nfile
-        read(io,*) (state(ifile)%init_id(imol), imol = 1, option%nmol)
+        read(io,*) (init_id(imol), imol = 1, option%nmol)
       end do
       close(io)
       
@@ -390,14 +347,6 @@ module mod_analyze
         boundary%is_connected = .false.
       end if
 
-      if (option%read_connectivity) then
-        write(fname,'(a,".connect")') trim(output%fhead)
-        call open_file(fname, io, frmt = 'unformatted', stat = 'old')
-        read(io) boundary%is_connected 
-        close(io) 
-        return
-      end if
-
       do imol = 1, nmol
         do istep = 1, nstep
           snow = state%data(istep, imol)
@@ -415,12 +364,6 @@ module mod_analyze
 
         end do
       end do
-
-      write(fname,'(a,".connect")') trim(output%fhead)
-      call open_file(fname, io, frmt = 'unformatted', stat = 'replace')
-      write(io) boundary%is_connected 
-      close(io) 
-      return
 
     end subroutine get_state_connectivity
 !-----------------------------------------------------------------------

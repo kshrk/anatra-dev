@@ -6,7 +6,6 @@ module mod_ctrl
   use mod_input
   use mod_output
   use mod_cv
-  use mod_bootstrap
   implicit none
 
   ! constants
@@ -22,17 +21,11 @@ module mod_ctrl
   ! structures
   !
   type :: s_option
-    logical :: use_bootstrap        = .false.
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
-    logical :: use_single_event     = .false. 
-    logical :: read_connectivity    = .false.
+    logical :: use_single_event     = .false.
     logical :: read_init_id         = .false.
-    logical :: write_Rij_bin        = .false. 
-    logical :: read_Rij_bin         = .false.
-    logical :: write_Kijk_bin       = .false.
-    logical :: read_Kijk_bin        = .false. 
     logical :: extrapolate          = .false.
     logical :: check_Kijk           = .false.
 
@@ -107,7 +100,7 @@ module mod_ctrl
   contains
 
 !-----------------------------------------------------------------------
-    subroutine read_ctrl(input, einput, output, option, bootopt, timegrid)
+    subroutine read_ctrl(input, einput, output, option, timegrid)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -115,7 +108,6 @@ module mod_ctrl
       type(s_extra_input), intent(out) :: einput
       type(s_output),      intent(out) :: output
       type(s_option),      intent(out) :: option 
-      type(s_bootopt),     intent(out) :: bootopt 
       type(s_timegrid),    intent(out) :: timegrid 
 
       ! I/O
@@ -136,22 +128,7 @@ module mod_ctrl
       call read_ctrl_output (io, output)
       call show_output      (output)
       call read_ctrl_option (io, option, timegrid)
-
-      if (option%read_connectivity .or.  &
-          option%read_init_id      .or.  &
-          option%read_Rij_bin      .or.  &
-          option%read_Kijk_bin) then
-
-        !call read_ctrl_extra_input(
-
-      end if
-
       call read_ctrl_state  (io, option)
-
-      if (option%use_bootstrap) then
-        call read_ctrl_bootstrap(io, bootopt)
-      end if
-
       close(io)
 
     end subroutine read_ctrl
@@ -168,17 +145,11 @@ module mod_ctrl
       type(s_option),   intent(out) :: option
       type(s_timegrid), intent(out) :: timegrid
 
-      logical :: use_bootstrap        = .false.
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
       logical :: use_single_event     = .false.
-      logical :: read_connectivity    = .false.
       logical :: read_init_id         = .false.
-      logical :: write_Kijk_bin       = .false.
-      logical :: read_Kijk_bin        = .false.
-      logical :: write_Rij_bin        = .false. 
-      logical :: read_Rij_bin         = .false. 
       logical :: extrapolate          = .false.
       logical :: check_Kijk           = .false.
 
@@ -210,17 +181,11 @@ module mod_ctrl
 
 
       namelist /option_param/ &
-        use_bootstrap,        &
         use_reflection_state, &
         use_product_state,    &
         use_dissociate_state, &
         use_single_event,     &
-        read_connectivity,    &
         read_init_id,         &
-        write_Kijk_bin,       &
-        read_Kijk_bin,        &
-        write_Rij_bin,        &
-        read_Rij_bin,         &
         extrapolate,          &
         check_Kijk,           &
         kinetic_mode,         &
@@ -244,7 +209,6 @@ module mod_ctrl
 
       write(iw,*)
       write(iw,'(">> Option section parameters")')
-      write(iw,'("use_bootstrap        = ", a)')     get_tof(use_bootstrap)
       write(iw,'("kinetic_mode         = ", a)')     trim(kinetic_mode)
 
       if (trim(kinetic_mode) == 'REACTION') then
@@ -252,12 +216,7 @@ module mod_ctrl
         write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
         write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
         write(iw,'("use_single_event     = ", a)')   get_tof(use_single_event)
-        write(iw,'("read_connectivity    = ", a)')   get_tof(read_connectivity)
         write(iw,'("read_init_id         = ", a)')   get_tof(read_init_id)
-        write(iw,'("write_Kijk_bin       = ", a)')   get_tof(write_Kijk_bin)
-        write(iw,'("read_Kijk_bin        = ", a)')   get_tof(read_Kijk_bin)
-        write(iw,'("write_Rij_bin        = ", a)')   get_tof(write_Rij_bin)
-        write(iw,'("read_Rij_bin         = ", a)')   get_tof(read_Rij_bin)
         write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
         write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
       end if
@@ -326,7 +285,7 @@ module mod_ctrl
         write(iw,*)
         do i = 1, MaxStates
           if (dissociate_state_ids(i) /= NotSpecified)  then
-            write(iw,'("dissociate_state_ids  ", i0, " : ", i0)')i,  dissociate_state_ids(i)
+            write(iw,'("dissociate_state_ids  ", i0, " : ", i0)') i,  dissociate_state_ids(i)
             option%is_dissoc(dissociate_state_ids(i)) = .true.
             ndissoc                                   = ndissoc + 1
           else
@@ -355,19 +314,6 @@ module mod_ctrl
         option%is_initial(initial_state_ids(i)) = .true. 
       end do
 
-      ! Specific element
-      !
-      if (write_Kijk_bin .or. read_Kijk_bin) then
-        nselect = 0
-        do i = 1, MaxStates
-          if (sel_ijk(1, i) /= NotSpecified) then
-            nselect = nselect + 1
-            write(iw,'("sel_ijk      = ", 3(i0,2x))') sel_ijk(1:3, i)
-          end if
-        end do
-        option%nselect = nselect 
-      end if
-
       iopt = get_opt(kinetic_mode, KineticModes, ierr)
       if (ierr /= 0) then
         write(iw,'("Read_Ctrl_Option> Error.")')
@@ -375,17 +321,11 @@ module mod_ctrl
       end if
       option%kinetic_mode = iopt
 
-      option%use_bootstrap        = use_bootstrap
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
       option%use_single_event     = use_single_event
-      option%read_connectivity    = read_connectivity
       option%read_init_id         = read_init_id
-      option%write_Kijk_bin       = write_Kijk_bin
-      option%read_Kijk_bin        = read_Kijk_bin
-      option%write_Rij_bin        = write_Rij_bin
-      option%read_Rij_bin         = read_Rij_bin
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
 

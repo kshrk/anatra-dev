@@ -318,18 +318,18 @@
 
         if (mod(istep, nt_tcfout) == 0 .or. istep == 0) then
          
-          write(io_q,'(f20.10)', advance = 'no') dt * istep
-          write(io_p,'(f20.10)', advance = 'no') dt * istep
-          write(io, '(3f20.10)') dt * istep, psum, pint
+          write(io_q,'(e15.7,2x)', advance = 'no') dt * istep
+          write(io_p,'(e15.7,2x)', advance = 'no') dt * istep
+          write(io,  '(3(e15.7,2x))') dt * istep, psum, pint
 
           do ib = -nboundary, nboundary
             if (ib == 0) cycle 
-            write(io_q,'(f20.10)', advance = 'no') Qij(it, ib)
+            write(io_q,'(e15.7,2x)', advance = 'no') Qij(it, ib)
           end do
           write(io_q,*)
 
           do is = 1, nstate
-            write(io_p,'(f20.10)', advance = 'no') Pi(it, is)
+            write(io_p,'(e15.7,2x)', advance = 'no') Pi(it, is)
           end do
           write(io_p,*)
 

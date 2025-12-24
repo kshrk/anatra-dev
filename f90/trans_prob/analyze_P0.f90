@@ -94,7 +94,7 @@
         write(io,'(f20.10)', advance = 'no') option%dt_out * istep 
         do is = 1, nstate
           if (option%is_initial(is)) then
-            write(io,'(f20.10)', advance = 'no') P0(istep, is) 
+            write(io,'(e15.7,2x)', advance = 'no') P0(istep, is) 
           end if
         end do
         write(io,*)

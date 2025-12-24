@@ -125,7 +125,7 @@
             cycle
           end if
 
-          write(io,'(f20.10)', advance = 'no') Mij(istep, ib)
+          write(io,'(e15.7,2x)', advance = 'no') Mij(istep, ib)
 
         end do
         write(io,*)

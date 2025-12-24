@@ -29,6 +29,7 @@ module mod_cv
   public :: read_ctrl_cvinfo
   public :: read_ctrl_cvinfo_weight
   public :: read_cv
+  public :: deallocate_cv
 
   contains
 !-----------------------------------------------------------------------
@@ -285,6 +286,27 @@ module mod_cv
 
 
     end subroutine read_cv_weight
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine deallocate_cv(cv)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_cv), intent(inout) :: cv
+
+
+      if (allocated(cv%x)) then
+        cv%nstep = 0
+        cv%ndim  = 0
+        deallocate(cv%x, cv%data)
+        if (allocated(cv%weight)) then
+          deallocate(cv%weight)
+        end if
+      end if 
+
+
+    end subroutine deallocate_cv
 !-----------------------------------------------------------------------
 end module
 !=======================================================================

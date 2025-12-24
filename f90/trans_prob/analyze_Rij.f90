@@ -1,5 +1,5 @@
 !-----------------------------------------------------------------------
-    subroutine calc_Rij_wo_normalize(option, state, Rij)
+    subroutine update_Rij_wo_normalize(option, state, Rij)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -59,7 +59,7 @@
 
       end do
 
-    end subroutine calc_Rij_wo_normalize
+    end subroutine update_Rij_wo_normalize
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
@@ -227,8 +227,8 @@
           if (option%is_initial(js)) then
             do is = 1, nstate
               if (boundary%is_connected(is, js)) then
-                write(io,'(f20.10)', advance = 'no') Rij    (istep, is, js) 
-                write(io,'(f20.10)', advance = 'no') Rij_int(istep, is, js) 
+                write(io,'(e15.7,2x)', advance = 'no') Rij    (istep, is, js) 
+                write(io,'(e15.7,2x)', advance = 'no') Rij_int(istep, is, js) 
               end if
             end do
           end if
@@ -240,111 +240,4 @@
 
 
     end subroutine write_Rij
-!-----------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-    subroutine Rij_bin(output, option, boundary, Rij)
-!-----------------------------------------------------------------------
-      implicit none
-
-      type(s_output),   intent(in)    :: output 
-      type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary 
-      real(8),          intent(inout) :: Rij(0:option%nt_range, &
-                                             option%nstate,     &
-                                             option%nstate)
-
-      ! I/O
-      !
-      integer :: io
-      logical :: io_status
-
-      ! Local
-      !
-      integer                :: nt_range, nstate
-      integer                :: nset 
-      character(len=MaxChar) :: fname
-      logical                :: exists
-      
-      ! Dummy
-      !
-      integer :: i, j, k, ib, is, js, ifile, iset
-
-      ! Arrays
-      !
-      real(8), allocatable :: wrk(:)
-
-
-      ! Setup
-      !
-      nt_range = option%nt_range
-      nstate   = option%nstate 
-
-      allocate(wrk(0:nt_range))
-  
-      if (.not. option%write_Rij_bin &
-    .and. .not. option%read_Rij_bin) return 
-
-      ! Read
-      !
-      if (option%read_Rij_bin) then
-        ifile = 0
-        do while (.true.)
-          write(fname,'(a,i4.4,".rbin")') trim(output%fhead), ifile + 1
-          inquire(file=trim(fname), exist=io_status)
-          if (io_status) then
-            call open_file(fname, io, frmt = 'unformatted')
-            read(io) nset
-            do iset = 1, nset
-              read(io) i, j, wrk
-              Rij(:, i, j) = wrk(:) * option%state_weight(j)
-              write(iw,'("Read Rij ",i0,2x,i0)') i, j
-            end do
-            close(io)
-            ifile = ifile + 1 
-          else
-            return
-          end if
-        end do 
-      end if
-
-      ! Write 
-      !
-      if (option%write_Rij_bin) then
-
-        nset = 0
-        do j = 1, nstate
-          if (.not. option%is_initial(j)) cycle
-          do i = 1, nstate
-            if (i == j .or. .not. boundary%is_connected(i, j)) cycle
-              nset = nset + 1
-          end do
-        end do
-
-        ifile = 0
-        do while (.true.)
-          ifile = ifile + 1
-          write(fname,'(a,i4.4,".rbin")') trim(output%fhead), ifile
-          inquire(file=trim(fname), exist = exists)
-          if (.not. exists) exit 
-        end do
-
-        write(iw,'("Write Rij")')
-        call open_file(fname, io, frmt = 'unformatted')
-        write(io) nset
-        do j = 1, nstate
-          if (.not. option%is_initial(j)) cycle
-          do i = 1, nstate
-            if (i == j .or. .not. boundary%is_connected(i, j)) cycle
-            wrk(:) = Rij(:, i, j) / option%state_weight(j)
-            write(iw,'(i0,2x,i0)') i, j
-            write(io) i, j, wrk
-          end do
-        end do
-        close(io)
-      end if
-
-      deallocate(wrk)
-
-    end subroutine Rij_bin 
 !-----------------------------------------------------------------------
