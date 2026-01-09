@@ -185,6 +185,15 @@ module mod_analyze
       call write_Kijk  (output, option, boundary, Kijk)
       call write_Mij   (output, option, boundary, Mij)
 
+      ! Setup Boundary conditions 
+      !
+      call set_reflection(output, option, boundary, Kijk, Mij)
+      call set_product   (output, option, boundary, Kijk, Mij)
+
+      if (option%calc_Pint) then
+        call reacdyn_pint(output, option, boundary, Rij, P0, Kijk, Mij)
+      end if
+
       if (option%extrapolate) then
 
         write(iw,*)
@@ -192,8 +201,8 @@ module mod_analyze
 
         ! Setup Boundary conditions 
         !
-        call set_reflection(output, option, boundary, Kijk, Mij)
-        call set_product   (output, option, boundary, Kijk, Mij)
+        !call set_reflection(output, option, boundary, Kijk, Mij)
+        !call set_product   (output, option, boundary, Kijk, Mij)
         
         ! Extend timescale 
         !
@@ -484,6 +493,7 @@ module mod_analyze
     include 'analyze_Mij.f90'
     include 'analyze_bc.f90'
     include 'analyze_reacdyn.f90'
+    include 'analyze_pint.f90'
 
 end module mod_analyze
 !=======================================================================

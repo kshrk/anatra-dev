@@ -27,6 +27,7 @@ module mod_ctrl
     logical :: use_single_event     = .false.
     logical :: read_init_id         = .false.
     logical :: extrapolate          = .false.
+    logical :: calc_Pint            = .false.
     logical :: check_Kijk           = .false.
 
     integer :: kinetic_mode  = KineticModeTransition
@@ -151,6 +152,7 @@ module mod_ctrl
       logical :: use_single_event     = .false.
       logical :: read_init_id         = .false.
       logical :: extrapolate          = .false.
+      logical :: calc_Pint            = .false.
       logical :: check_Kijk           = .false.
 
       character(len=MaxChar) :: kinetic_mode     = 'TRANSITION'
@@ -188,6 +190,7 @@ module mod_ctrl
         read_init_id,         &
         extrapolate,          &
         check_Kijk,           &
+        calc_Pint,            &
         kinetic_mode,         &
         f_init_id,            &
         nmol,                 &
@@ -218,6 +221,7 @@ module mod_ctrl
         write(iw,'("use_single_event     = ", a)')   get_tof(use_single_event)
         write(iw,'("read_init_id         = ", a)')   get_tof(read_init_id)
         write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
+        write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
         write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
       end if
 
@@ -328,6 +332,7 @@ module mod_ctrl
       option%read_init_id         = read_init_id
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
+      option%calc_Pint            = calc_Pint
 
       option%f_init_id            = f_init_id
 
