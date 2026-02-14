@@ -141,7 +141,7 @@
       do is = 1, nstate 
         if (option%is_dissoc(is)) then
           Pint(is) = 0.0d0
-          cycle       
+          cycle
         end if
 
         Pint(is) = sum(P0(0:nt_range, is)) * dt

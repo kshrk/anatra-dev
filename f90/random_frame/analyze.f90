@@ -974,6 +974,11 @@ module mod_analyze
         retval =  nf90_put_var(io_o, var_box,    nc_in%box(1:3, 1),           start = start_box, count = count_box) 
         retval =  nf90_put_var(io_o, var_angle,  nc_in%angle(1:3, 1),         start = start_box, count = count_box)
 
+        if (option%out_rst7) then
+           write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), istep
+           call write_inpcrd(finpcrd, nc_in%coord(1:3, 1:natm, 1), nc_in%box(1:3, 1))
+        end if
+
       end do 
 
       call netcdf_close(io_o)
@@ -1009,7 +1014,7 @@ module mod_analyze
         write(io,'(3f12.7)', advance="no") &
           coord(1:3, iatm)
 
-        if (mod(iatm, 2) == 0) &
+        if (mod(iatm, 2) == 0 .or. iatm == natm) &
           write(io,*)
 
       end do

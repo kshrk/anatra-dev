@@ -15,9 +15,9 @@
       ! Local
       !
       integer :: nmol, nstep, nt_range, nt_sparse
-      integer :: init_id
+      integer :: init_id, unp_id
       real(8) :: dt
-      logical :: is_final, use_single_event
+      logical :: is_final, is_prod, is_dissoc, use_single_event
 
       ! Dummy 
       !
@@ -32,6 +32,7 @@
       !
       nmol             = option%nmol
       nstep            = state%nstep
+      unp_id           = state%unperturbed_id
       nt_range         = option%nt_range
       nt_sparse        = option%nt_sparse
       dt               = option%dt_out
@@ -60,20 +61,30 @@
             if (ireac == 1) then
               ista              = istep - nt_sparse
               js                = is
-              hit_count(js, ks) = hit_count(js, ks) + 1.0d0
+              if (unp_id == js .or. unp_id == -1) then 
+                hit_count(js, ks) = hit_count(js, ks) + 1.0d0
+              end if
             else
               iend    = istep - nt_sparse 
               it_diff = iend - ista
               it_diff = int(it_diff / dble(nt_sparse))
-              Kijk(it_diff, is, js, ks) &
-                      = Kijk(it_diff, is, js, ks) + 1.0d0
-              hit_count(is, js) = hit_count(is, js) + 1.0d0
+
+              if (unp_id == js .or. unp_id == -1) then 
+                Kijk(it_diff, is, js, ks) &
+                        = Kijk(it_diff, is, js, ks) + 1.0d0
+              end if
+
+              if (unp_id == is .or. unp_id == -1) then
+                hit_count(is, js) = hit_count(is, js) + 1.0d0
+              end if
+
               ls      = ks
               ks      = js
               js      = is
               ista    = istep - nt_sparse 
 
-              if (istep == nstep) then
+              !if (istep == nstep) then
+              if (istep == nstep .or. istep + nt_sparse > nstep) then
                 is_final = .true.
               end if
 
@@ -90,38 +101,123 @@
           end if
         end do
 
-        if (ireac == 0 .or. ireac == 1) then
-          if (option%use_product_state) then
-            do iprod = 1, option%nproduct
-              if (js == option%product_state_ids(iprod)) then
-                return
-              end if
-            end do 
-          else if (option%use_dissociate_state) then
-            do idissoc = 1, option%ndissoc
-              if (js == option%dissociate_state_ids(idissoc)) then
-                return
-              end if
-            end do 
-          else
-            write(iw,'("Update_Kijk_wo_normalize> Error.")')
-            write(iw,'("No reaction is observed.")')
-            stop
-          end if
+        ! New implementation
+        !
+        if (ireac == 0) cycle
 
-          if (ireac == 1) then
-            if (.not. option%is_dissoc(js)) then 
-              hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+        if (option%use_product_state) then
+          is_prod = .false. 
+          do iprod = 1, option%nproduct
+            if (js == option%product_state_ids(iprod)) then
+              is_prod = .true.
+              exit 
             end if
-          end if
+          end do
+          if (is_prod) cycle
+        end if
+!
+!        if (option%use_dissociate_state) then
+!          is_dissoc = .false.
+!          do idissoc = 1, option%ndissoc
+!            if (js == option%dissociate_state_ids(idissoc)) then
+!              is_dissoc = .true.
+!              exit 
+!            end if
+!          end do
+!          if (is_dissoc) cycle 
+!        end if
+!
+!        if (.not. option%is_dissoc(js)) then
+!          if (unp_id == js .or. unp_id == -1) then
+!            hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+!          end if
+!        end if
 
-        else
-
-          if (.not. option%is_dissoc(js)) then
+        if (option%is_dissoc(js)) then
+          if (is_final .and. (unp_id == js .or. unp_id == -1)) then
             hit_count(js, ks) = hit_count(js, ks) - 1.0d0
           end if
-
+        else
+          if (unp_id == js .or. unp_id == -1) then
+            hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+          end if
         end if
+
+        ! End of New implementation
+        !
+
+!        if (ireac == 0 .or. ireac == 1) then
+!
+!          if (option%use_product_state) then
+!            do iprod = 1, option%nproduct
+!              if (js == option%product_state_ids(iprod)) then
+!                return
+!              end if
+!            end do 
+!          end if
+!
+!          if (option%use_dissociate_state) then
+!            do idissoc = 1, option%ndissoc
+!              if (js == option%dissociate_state_ids(idissoc)) then
+!                return
+!              end if
+!            end do 
+!          end if
+!
+!          if (ireac == 1) then
+!            if (.not. option%is_dissoc(js)) then
+!              if (unp_id == js .or. unp_id == -1) then
+!                hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+!              end if
+!            end if
+!            return
+!          end if
+!
+!          !write(iw,'("Update_Kijk_wo_normalize> Error.")')
+!          !write(iw,'("No reaction is observed.")')
+!          !stop
+!
+!          !if (option%use_product_state) then
+!          !  do iprod = 1, option%nproduct
+!          !    if (js == option%product_state_ids(iprod)) then
+!          !      return
+!          !    end if
+!          !  end do 
+!          !else if (option%use_dissociate_state) then
+!          !  do idissoc = 1, option%ndissoc
+!          !    if (js == option%dissociate_state_ids(idissoc)) then
+!          !      return
+!          !    end if
+!          !  end do 
+!          !else
+!          !  write(iw,'("Update_Kijk_wo_normalize> Error.")')
+!          !  write(iw,'("No reaction is observed.")')
+!          !  stop
+!          !end if
+!
+!          !if (ireac == 1) then
+!          !  if (.not. option%is_dissoc(js)) then 
+!          !    hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+!          !  end if
+!          !end if
+!
+!          !if (ireac == 1) then
+!          !  if (.not. option%is_dissoc(js)) then
+!          !    if (unp_id == js .or. unp_id == -1) then
+!          !      hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+!          !    end if
+!          !  end if
+!          !end if
+!
+!        else
+!
+!          if (.not. option%is_dissoc(js)) then
+!            if (unp_id == js .or. unp_id == -1) then
+!              hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+!            end if
+!          end if
+!
+!        end if
 
       end do
 
@@ -207,6 +303,8 @@
       nboundary = boundary%nboundary 
       dt        = option%dt_out
 
+      ! Normalize
+      !
       do ib = -nboundary, nboundary
 
         if (ib == 0) then
@@ -225,6 +323,23 @@
         end if
 
       end do
+
+      ! Report Hit counts
+      !
+      write(iw,'("Normalize_Kijk> Summary of Hit counts")')
+      write(iw,'("I <--- J")')
+      do ib = -nboundary, nboundary
+        if (ib == 0) then
+          cycle
+        end if
+
+        is1 = boundary%b2p(1, ib)
+        is2 = boundary%b2p(2, ib)
+
+        write(iw,'(i5,i5," : ", f20.10)') is2, is1, hit_count(ib) 
+      end do
+      write(iw,*)
+      
 
     end subroutine normalize_Kijk
 !-----------------------------------------------------------------------
@@ -419,16 +534,18 @@
         is1 = boundary%b2p(1, ib)
         is2 = boundary%b2p(2, ib)
 
+        state_sum = 0.0d0
         do js = 1, nstate
-          state_sum = 0.0d0
-          if (boundary%is_connected(js, is2)) then 
-            state_sum = sum(Kijk(:, js, ib))
-            if (state_sum < 1.0d-6) then
-              write(iw,'("Check_Kijk> Warning.")')
-              write(iw,'("K(",i0,2x,i0,2x,i0,") is zero")') js, is2, is1
-            end if 
+          if (boundary%is_connected(js, is2)) then
+            state_sum = state_sum + sum(Kijk(:, js, ib)) * dt
+            !if (state_sum < 1.0d-6) then
+            !  write(iw,'("Check_Kijk> Warning.")')
+            !  write(iw,'("K(",i0,2x,i0,2x,i0,") is zero")') js, is2, is1
+            !end if 
           end if
         end do
+
+        write(iw,'("Kint value at Boundary ", i5, i5, " : ", f15.7)') is2, is1, state_sum
 
       end do
 

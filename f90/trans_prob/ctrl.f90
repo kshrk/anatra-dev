@@ -21,6 +21,7 @@ module mod_ctrl
   ! structures
   !
   type :: s_option
+    logical :: use_perturbed_traj   = .false.
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
@@ -43,7 +44,8 @@ module mod_ctrl
 
     ! File names 
     !
-    character(len=MaxChar) :: f_init_id  = ''
+    character(len=MaxChar) :: f_init_id        = ''
+    character(len=MaxChar) :: f_unperturbed_id = ''
 
     ! for time scale definition
     !
@@ -146,6 +148,7 @@ module mod_ctrl
       type(s_option),   intent(out) :: option
       type(s_timegrid), intent(out) :: timegrid
 
+      logical :: use_perturbed_traj   = .false.
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
@@ -156,7 +159,8 @@ module mod_ctrl
       logical :: check_Kijk           = .false.
 
       character(len=MaxChar) :: kinetic_mode     = 'TRANSITION'
-      character(len=MaxChar) :: f_init_id        = '' 
+      character(len=MaxChar) :: f_init_id        = ''
+      character(len=MaxChar) :: f_unperturbed_id = '' 
       
       integer :: nmol                            = NotSpecified
       integer :: ndim                            = NotSpecified
@@ -183,6 +187,7 @@ module mod_ctrl
 
 
       namelist /option_param/ &
+        use_perturbed_traj,   &
         use_reflection_state, &
         use_product_state,    &
         use_dissociate_state, &
@@ -193,6 +198,7 @@ module mod_ctrl
         calc_Pint,            &
         kinetic_mode,         &
         f_init_id,            &
+        f_unperturbed_id,     &
         nmol,                 &
         ndim,                 &
         nstate,               &
@@ -215,6 +221,7 @@ module mod_ctrl
       write(iw,'("kinetic_mode         = ", a)')     trim(kinetic_mode)
 
       if (trim(kinetic_mode) == 'REACTION') then
+        write(iw,'("use_perturbed_traj   = ", a)')   get_tof(use_perturbed_traj)
         write(iw,'("use_reflection_state = ", a)')   get_tof(use_reflection_state)
         write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
         write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
@@ -223,6 +230,7 @@ module mod_ctrl
         write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
         write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
         write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
+        write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
       end if
 
       write(iw,'("extrapolate          = ", a)')     get_tof(extrapolate)
@@ -325,6 +333,7 @@ module mod_ctrl
       end if
       option%kinetic_mode = iopt
 
+      option%use_perturbed_traj   = use_perturbed_traj
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
@@ -335,6 +344,7 @@ module mod_ctrl
       option%calc_Pint            = calc_Pint
 
       option%f_init_id            = f_init_id
+      option%f_unperturbed_id     = f_unperturbed_id
 
       option%nmol                 = nmol
       option%ndim                 = ndim
@@ -416,6 +426,12 @@ module mod_ctrl
         stop
       end if
 
+      if (use_perturbed_traj .and. nmol > 1) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("nmol should be 1 &
+                   &if use_perturbed_traj = .true.")')
+        stop
+      end if
 
       if (use_reflection_state .and. nreflect < 0) then
         write(iw,'("Read_Ctrl_Option> Error.")')

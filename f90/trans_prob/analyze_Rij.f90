@@ -12,28 +12,40 @@
       ! Local
       !
       integer :: nmol, nstep, nt_range, nt_sparse
+      integer :: use_for_Rij
 
       ! Dummy 
       !
       integer :: istep, jstep, imol
-      integer :: is, js
-      integer :: it, it_reac, it_diff, nt
+      integer :: is, js, it, it_reac, it_diff, nt
+      integer :: unp_id
       real(8) :: dt
 
 
       ! Setup
       !
-      nmol      = option%nmol
-      nstep     = state%nstep
-      nt_range  = option%nt_range
-      nt_sparse = option%nt_sparse
-      dt        = option%dt_out
+      nmol        = option%nmol
+      nstep       = state%nstep
+      unp_id      = state%unperturbed_id
+      use_for_Rij = state%use_for_Rij
+      nt_range    = option%nt_range
+      nt_sparse   = option%nt_sparse
+      dt          = option%dt_out
 
       do imol = 1, nmol
 
         ! Search reaction time
         !
-        js      = state%data(1, imol)
+        js = state%data(1, imol)
+
+        if (.not. option%is_initial(js)) cycle
+
+        !if (js /= unp_id .and. unp_id /= -1 .and. & 
+        !    .not. (use_for_Rij == -1 .or. use_for_Rij == 1)) return
+        if (.not. (use_for_Rij == -1 .or. use_for_Rij == 1)) return
+
+        !write(iw,'("Update_Rij_wo_Normalize> Update Rij")')
+
         it_reac = 0 
         do istep = nt_sparse + 1, nstep, nt_sparse
           is = state%data(istep, imol)
@@ -43,10 +55,11 @@
           end if
         end do
 
-        if (option%is_initial(js) .and. it_reac == 0) then
-          write(iw,'("Calc_Rij_wo_normalize> Error.")')
-          write(iw,'("No reaction is observed.")')
-          stop
+        !if (option%is_initial(js) .and. it_reac == 0) then
+        if (it_reac == 0) then
+          write(iw,'("Calc_Rij_wo_normalize> ")')
+          write(iw,'("Molecule ", i5, ": No reaction is observed.")') imol
+          cycle 
         end if
 
         ! Calc.
