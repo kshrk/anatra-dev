@@ -225,6 +225,53 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
+    subroutine update_Kijk_from_hist(io, option, Kijk, hit_count)
+!-----------------------------------------------------------------------
+      implicit none
+
+      integer,          intent(in)    :: io
+      type(s_option),   intent(in)    :: option
+      real(8),          intent(inout) :: Kijk(0:option%nt_range,        &
+                                             option%nstate,             &
+                                             option%nstate,             &
+                                             option%nstate)
+      real(8),          intent(inout) :: hit_count(option%nstate,       &
+                                                   option%nstate)
+
+      ! Local
+      !
+      integer :: nmol, nstep, nt_range, nt_sparse
+      integer :: init_id, unp_id
+      real(8) :: dt
+      logical :: is_final, is_prod, is_dissoc, use_single_event
+
+      ! Dummy 
+      !
+      character(len=MaxChar) :: line, typ
+      integer                :: istep
+      integer                :: is, js, ks
+      real(8)                :: val
+
+      ! Setup
+      !
+
+      do while (.true.)
+        read(io,'(a)',end=100) line
+        read(line,*) typ
+        if (trim(typ) == 'H') then
+          read(line,*) typ, js, ks, val
+          hit_count(js, ks) = hit_count(js, ks) + val
+        else if (trim(typ) == 'K') then
+          read(line,*) typ, is, js, ks, istep, val
+          Kijk(istep, is, js, ks) = Kijk(istep, is, js, ks) + val  
+        end if 
+      end do
+ 100  return 
+
+    end subroutine update_Kijk_from_hist
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
     subroutine convert_Kijk_arrays(option, boundary, Ktmp, htmp, Kijk, hit_count)
 !-----------------------------------------------------------------------
       implicit none
@@ -550,4 +597,77 @@
       end do
 
     end subroutine check_Kijk
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine output_Kijk_hist(option, output, Kijk, hit_count)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option), intent(in) :: option
+      type(s_output), intent(in) :: output
+      real(8),        intent(in) :: Kijk(0:option%nt_range,        &
+                                        option%nstate,             &
+                                        option%nstate,             &
+                                        option%nstate)
+      real(8),        intent(in) :: hit_count(option%nstate,       &
+                                              option%nstate)
+     
+
+      ! I/O
+      !
+      integer :: io
+
+      ! Local
+      !
+      character(len=MaxChar) :: fname
+      integer                :: nt_range
+      integer                :: nstate
+      real(8)                :: hsum, val
+
+      ! Dummy
+      !
+      integer :: is, js, ks, istep
+
+
+      ! Setup
+      !
+      nstate   = option%nstate
+      nt_range = option%nt_range
+
+      hsum = sum(hit_count(:, :))
+      if (hsum < 0.999d0) then
+        return
+      end if
+
+      write(fname,'(a,".khist")') trim(output%fhead)
+      call open_file(fname, io)
+
+      write(io,'("KIJK")')
+
+      do ks = 1, nstate
+      do js = 1, nstate
+        val = hit_count(js, ks)
+        if (val >= 0.999d0) then
+          write(io, '("H", 2x, i5, 2x, i5, 2x, f20.10)') js, ks, val 
+        end if
+      end do
+      end do
+
+      do ks = 1, nstate
+      do js = 1, nstate
+      do is = 1, nstate
+      do istep = 0, nt_range
+        val = Kijk(istep, is, js, ks)
+        if (val >= 0.999d0) then
+          write(io, '("K", 2x, i5, 2x, i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, ks, istep, val
+        end if
+      end do 
+      end do
+      end do 
+      end do
+
+      close(io)
+
+    end subroutine output_Kijk_hist
 !-----------------------------------------------------------------------

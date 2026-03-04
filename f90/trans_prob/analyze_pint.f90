@@ -34,16 +34,20 @@
       integer :: is, js, ks, is1, is2, js1, js2
       integer :: iu, ju, ku
       integer :: ib, jb, inflx, jnflx, id
-      integer :: lda, ldb, info
+      integer :: lda, ldb, ldvl, ldvr, info, lwork
       real(8) :: psum
+      real(8) :: t1, t2
 
       ! Arrays
       !
-      real(8), allocatable :: Qint(:)
-      real(8), allocatable :: Kuu(:, :, :), Mu(:, :), Ru(:, :)
-      real(8), allocatable :: Xuu(:, :), Pint(:)
+      real(8), allocatable :: Qint(:), Qinf(:)
+      real(8), allocatable :: Kuu(:, :), Mu(:), Ru(:)
+      real(8), allocatable :: Xuu(:, :), Pint(:), Pss(:)
       integer, allocatable :: map(:, :), mapb(:), mapb_inv(:)
       integer, allocatable :: ipiv(:)
+      real(8), allocatable :: wr(:), wi(:)        ! for eigen
+      real(8), allocatable :: vl(:, :), vr(:, :)  ! for eigen
+      real(8), allocatable :: work(:)             ! for eigen 
 
 
       ! Setup
@@ -54,21 +58,24 @@
       nboundary = boundary%nboundary
       nbt       = nboundary * 2
 
-      allocate(Mu(0:nt_range, nbt))
-      allocate(Kuu(0:nt_range, nbt, nbt))
-      allocate(Ru(0:nt_range, nbt))
+      allocate(Mu(nbt))
+      allocate(Kuu(nbt, nbt))
+      allocate(Ru(nbt))
       allocate(Xuu(nbt, nbt))
       allocate(Pint(nstate))
-      allocate(Qint(nbt))
+      allocate(Pss(nstate))
+      allocate(Qint(nbt), Qinf(nbt))
       allocate(ipiv(nbt)) 
       allocate(map(2, nbt))
       allocate(mapb(nbt))
       allocate(mapb_inv(-nboundary:nboundary))
+      allocate(wr(nbt), wi(nbt), vl(nbt, nbt), vr(nbt, nbt))
       Mu       = 0.0d0
       Kuu      = 0.0d0
       Ru       = 0.0d0
       Xuu      = 0.0d0
       Pint     = 0.0d0
+      Pss      = 0.0d0
       Qint     = 0.0d0
       map      = 0
       mapb     = 0
@@ -85,8 +92,8 @@
         mapb(iu)            = ib
         mapb_inv(ib)        = iu
 
-        Mu(0:nt_range, iu) = Mij(0:nt_range, ib)
-        Ru(0:nt_range, iu) = Rij(0:nt_range, is2, is1)
+        Mu(iu) = sum(Mij(0:nt_range, ib))
+        Ru(iu) = sum(Rij(0:nt_range, is2, is1))
 
         ju = 0
         do jb = -nboundary, nboundary
@@ -96,7 +103,7 @@
           js2 = boundary%b2p(2, jb)
 
           if (is1 == js2) then
-            Kuu(0:nt_range, iu, ju) = Kijk(0:nt_range, is2, jb) 
+            Kuu(iu, ju) = sum(Kijk(0:nt_range, is2, jb))
           end if 
         end do
       end do
@@ -111,64 +118,152 @@
           if (boundary%conv_direc(ib)) then
             jb = -ib
             ju = mapb_inv(jb)
-            Ru(0:nt_range, ju) = Rij(0:nt_range, is2, is1)
-            Ru(0:nt_range, iu) = 0.0d0
+            Ru(ju) = sum(Rij(0:nt_range, is2, is1))
+            Ru(iu) = 0.0d0
 
-            Kuu(0:nt_range, ju, :) = 0.0d0
+            Kuu(ju, :) = 0.0d0
             do ku = 1, nbt
-              Kuu(0:nt_range, ju, ku) = Kuu(0:nt_range, iu, ku)
-              Kuu(0:nt_range, iu, ku) = 0.0d0
+              Kuu(ju, ku) = Kuu(iu, ku)
+              Kuu(iu, ku) = 0.0d0
             end do 
           end if
         end do
       end if
 
-      do ju = 1, nbt
-        Xuu(ju, ju) = 1.0d0
-        do iu = 1, nbt
-          Xuu(iu, ju) = Xuu(iu, ju) - sum(Kuu(0:nt_range, iu, ju)) * dt
+      if (option%calc_Pint) then
+        do ju = 1, nbt
+          Xuu(ju, ju) = 1.0d0
+          do iu = 1, nbt
+            Xuu(iu, ju) = Xuu(iu, ju) - Kuu(iu, ju) * dt
+          end do
         end do
-      end do
+        
+        do iu = 1, nbt
+          Qint(iu) = Ru(iu) * dt
+        end do
+        lda  = nbt
+        ldb  = nbt
+        ipiv = 0
+        call dgesv(nbt, 1, Xuu, lda, ipiv, Qint, ldb, info) 
+        
+        do is = 1, nstate 
+          if (option%is_dissoc(is)) then
+            Pint(is) = 0.0d0
+            cycle
+          end if
+        
+          Pint(is) = sum(P0(0:nt_range, is)) * dt
+          do iu = 1, nbt
+            if (map(2, iu) /= is) cycle
+            Pint(is) = Pint(is) + Mu(iu) * dt * Qint(iu)  
+          end do
+        end do
+        
+        ! Integrated values 
+        !
+        write(fname,'(a,".int")') trim(output%fhead)
+        call open_file(fname, io)
+        psum = 0.0
+        do is = 1, nstate
+          if (option%is_initial(is)) then
+            psum = psum + Pint(is)
+          end if
+        end do
+        
+        write(io,'("Pint Total  ", e15.7)') psum
+        do is = 1, nstate
+          if (option%is_dissoc(is)) cycle
+          write(io,'("Pint ", i5, 2x, e15.7)') is, Pint(is)
+        end do
+        
+        close(io)
 
-      do iu = 1, nbt
-        Qint(iu) = sum(Ru(0:nt_range, iu)) * dt
-      end do
-      lda  = nbt
-      ldb  = nbt
-      ipiv = 0
-      call dgesv(nbt, 1, Xuu, lda, ipiv, Qint, ldb, info) 
+      end if
 
-      do is = 1, nstate 
-        if (option%is_dissoc(is)) then
-          Pint(is) = 0.0d0
-          cycle
+      if (option%calc_Steady) then
+
+        ! Construct Transition kernel
+        !
+        Xuu = 0.0d0
+        do ju = 1, nbt
+          do iu = 1, nbt
+            Xuu(iu, ju) = Kuu(iu, ju) * dt
+          end do
+        end do
+
+        ! Solve Eigen-value problem of Xuu
+        !
+        lda   = nbt
+        ldvl  = nbt
+        ldvr  = nbt
+        lwork = -1
+        allocate(work(1))
+        call dgeev('N', 'V', nbt, Xuu, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, info) 
+        lwork = int(work(1))
+        deallocate(work)
+        allocate(work(lwork))
+
+        call dgeev('N', 'V', nbt, Xuu, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, info)
+
+        if (info /= 0) then
+          write(iw,'("Reacdyn_Pint> Error.")')
+          write(iw,'("Failed in solving eigen equation of Kint. stop.")')
+          stop
         end if
 
-        Pint(is) = sum(P0(0:nt_range, is)) * dt
+        ! << DEBUG
+        write(iw,*)
+        write(iw,'("[ Eigenvalues ]")')
         do iu = 1, nbt
-          if (map(2, iu) /= is) cycle
-          Pint(is) = Pint(is) + sum(Mu(0:nt_range, iu)) * dt * Qint(iu)  
+          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
         end do
-      end do
+        write(iw,*)
+        write(iw,'("[ Eigenvector corresponding to steady state]")')
+        iu = maxloc(wr(:), dim = 1)
 
-      ! Integrated values 
-      !
-      write(fname,'(a,".int")') trim(output%fhead)
-      call open_file(fname, io)
-      psum = 0.0
-      do is = 1, nstate
-        if (option%is_initial(is)) then
-          psum = psum + Pint(is)
-        end if
-      end do
+        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
+        do ju = 1, nbt
+          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
+        end do 
+        ! >> DEBUG
 
-      write(io,'("Pint Total  ", e15.7)') psum
-      do is = 1, nstate
-        if (option%is_dissoc(is)) cycle
-        write(io,'("Pint ", i5, 2x, e15.7)') is, Pint(is)
-      end do
+        iu = maxloc(wr(:), dim = 1)
+        Qinf(:) = vr(:, iu)
 
-      close(io)
+        Pss = 0.0d0
+        do is = 1, nstate 
+          do ju = 1, nbt
+            if (map(2, ju) /= is) cycle 
+            !Pss(is) = Pss(is) + sum(Mu(0:nt_range, ju)) * dt * Qinf(ju) 
+            Pss(is) = Pss(is) + Mu(ju) * dt * Qinf(ju) 
+          end do
+        end do
+
+        ! << DEBUG
+        write(iw,*)
+        write(iw,'("[ Steady state population ]")')
+        do is = 1, nstate
+          write(iw,'(i5,2x,f20.10)') is, Pss(is)
+        end do
+        ! >> DEBUG
+
+        write(fname,'(a,".steady")') trim(output%fhead)
+        call open_file(fname, io)
+        psum = 0.0
+        do is = 1, nstate
+          if (option%is_initial(is)) then
+            psum = psum + Pss(is)
+          end if
+        end do
+!        
+        do is = 1, nstate
+          write(io,'(i5, 2x, e15.7)') is, Pss(is) / psum
+        end do
+!        
+        close(io)
+
+
+      end if
 
       ! Deallocate memory
       !

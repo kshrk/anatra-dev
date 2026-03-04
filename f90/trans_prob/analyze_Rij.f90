@@ -76,6 +76,38 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
+    subroutine update_Rij_from_hist(io, option, Rij)
+!-----------------------------------------------------------------------
+      implicit none
+
+      integer,        intent(in)    :: io
+      type(s_option), intent(in)    :: option
+      real(8),        intent(inout) :: Rij(0:option%nt_range, &
+                                           option%nstate,     &
+                                           option%nstate)
+
+      ! Local
+      !
+
+      ! Dummy 
+      !
+      integer :: istep
+      integer :: is, js
+      real(8) :: val
+
+      ! Setup
+      !
+
+      do while (.true.)
+       read(io,*,end=100) is, js, istep, val
+       Rij(istep, is, js) = Rij(istep, is, js) + val
+      end do
+ 100  return 
+
+    end subroutine update_Rij_from_hist
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
     subroutine normalize_Rij(option, Rij)
 !-----------------------------------------------------------------------
       implicit none
@@ -253,4 +285,62 @@
 
 
     end subroutine write_Rij
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine output_Rij_hist(option, output, Rij)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option), intent(in) :: option
+      type(s_output), intent(in) :: output
+      real(8),        intent(in) :: Rij(0:option%nt_range, &
+                                        option%nstate,     &
+                                        option%nstate)
+
+      ! I/O
+      !
+      integer :: io
+
+      ! Local
+      !
+      character(len=MaxChar) :: fname
+      integer                :: nt_range, nstate
+
+      ! Dummy
+      !
+      integer :: is, js, istep
+      real(8) :: val
+
+
+      ! Setup
+      !
+      nstate   = option%nstate
+      nt_range = option%nt_range
+
+      val = sum(Rij(:, :, :))
+      if (val < 0.999d0) then
+        return
+      end if
+
+      write(fname,'(a,".rhist")') trim(output%fhead)
+      call open_file(fname, io)
+
+      write(io,'("RIJ")')
+
+      do js = 1, nstate
+      do is = 1, nstate
+      do istep = 0, nt_range
+        val = Rij(istep, is, js)
+        if (val >= 0.999d0) then
+          write(io, '(i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, istep, val
+        end if
+      end do 
+      end do
+      end do 
+
+      close(io)
+
+
+    end subroutine output_Rij_hist
 !-----------------------------------------------------------------------

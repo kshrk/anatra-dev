@@ -20,7 +20,11 @@
       ! Dummy
       !
       integer :: istep, is, js
-      real(8) :: rval, weight 
+      real(8) :: rval, weight
+
+      ! Arrays
+      !
+      real(8), allocatable :: rsum(:, :) 
 
 
       ! Setup
@@ -29,6 +33,9 @@
       nt_range = option%nt_range
       nstate   = option%nstate
       dt       = option%dt_out
+
+      allocate(rsum(nstate, nstate))
+      rsum = 0.0d0
 
       P0 = 0.0d0
       do is = 1, nstate
@@ -40,12 +47,15 @@
           if (.not. boundary%is_connected(js, is)) cycle
 
           do istep = 1, nt_range
-            P0(istep, is) = P0(istep, is) - dt * sum(Rij(0:istep - 1, js, is))
+            rsum(js, is)  = rsum(js, is) - dt * Rij(istep - 1, js, is)
+            P0(istep, is) = P0(istep, is) + rsum(js, is)
+            !P0(istep, is) = P0(istep, is) - dt * sum(Rij(0:istep - 1, js, is))
           end do
         end do
 
       end do
 
+      deallocate(rsum)
 
     end subroutine calc_P0_from_Rij 
 !-----------------------------------------------------------------------

@@ -240,7 +240,11 @@ module mod_analyze
         end do 
       end do
 
-      g0%data = g0%data / (weight_sum * dv)
+      if (option%norm_const < 0.0d0) then
+        g0%data = g0%data / (weight_sum * dv)
+      else
+        g0%data = option%norm_const * g0%data / (weight_sum * dv)
+      end if
 
       ! Calculate Gint = int dz (<Theta(z)>_sol' / <Theta(z)>_sol)
       ! Note that <Theta(z)>_sol = C * int dz g(z) 
@@ -360,22 +364,24 @@ module mod_analyze
 
       ! Normalize G 
       !
-      if (option%ndim < 3) then
-        call get_gmax(option, g0, gmax0)
-        g0%data = g0%data / gmax0
-
-        if (option%use_spline) then
-          call get_gmax(option, g1, gmax1)
-          g1%data = g1%data / gmax1
-        end if
-      else
-        if (.not. option%space3D) then
+      if (option%norm_const < 0.0d0) then
+        if (option%ndim < 3) then
           call get_gmax(option, g0, gmax0)
           g0%data = g0%data / gmax0
-
+       
           if (option%use_spline) then
             call get_gmax(option, g1, gmax1)
             g1%data = g1%data / gmax1
+          end if
+        else
+          if (.not. option%space3D) then
+            call get_gmax(option, g0, gmax0)
+            g0%data = g0%data / gmax0
+       
+            if (option%use_spline) then
+              call get_gmax(option, g1, gmax1)
+              g1%data = g1%data / gmax1
+            end if
           end if
         end if
       end if

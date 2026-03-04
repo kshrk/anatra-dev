@@ -29,6 +29,9 @@ module mod_ctrl
     integer :: ndim                   = MaxDim
     integer :: xyzcol(MaxDim)         = (/2, 3, 4/)
 
+    ! Normalization
+    real(8) :: norm_const             = -1.0d0
+
     ! Grid info.
     integer :: ng3(MaxDim)            = 100
     real(8) :: del(MaxDim)            = (/0.1d0, 0.1d0, 0.1d0/) 
@@ -150,6 +153,8 @@ module mod_ctrl
       integer :: ndim                       = 2
       integer :: xyzcol(MaxDim)             = (/1, 2, 3/)
 
+      real(8) :: norm_const                 = -1.0d0
+
       integer :: ng3(MaxDim)                = (/1, 1, 1/)
       real(8) :: del(MaxDim)                = (/1.0d0, 1.0d0, 1.0d0/) 
       real(8) :: origin(MaxDim)             = (/0.0d0, 0.0d0, 0.0d0/)
@@ -199,6 +204,7 @@ module mod_ctrl
         skip_calc,              &
         ndim,                   &
         xyzcol,                 &
+        norm_const,             &
         ng3,                    &
         del,                    &
         origin,                 &
@@ -285,7 +291,6 @@ module mod_ctrl
 
       end if
 
-
       ! Memory allocation
       !
       allocate(option%vr_cellpos(3, vr_ncell))
@@ -304,6 +309,9 @@ module mod_ctrl
       !   Dimensionality
       option%ndim                        = ndim
       option%xyzcol(1:ndim)              = xyzcol(1:ndim)
+
+      !
+      option%norm_const                  = norm_const
 
       !   Grid
       option%ng3(1:ndim)                 = ng3(1:ndim)

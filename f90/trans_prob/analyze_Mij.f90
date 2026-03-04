@@ -23,6 +23,10 @@
       integer :: it, it_reac, it_diff, nt
       integer :: ista, iend, ireac
 
+      ! Arrays
+      !
+      real(8), allocatable :: ksum(:, :)
+
 
       ! Setup
       !
@@ -32,6 +36,9 @@
       nt_range  = option%nt_range
       nt_sparse = option%nt_sparse
       dt        = option%dt_out
+
+      allocate(ksum(nstate, -nboundary:nboundary))
+      ksum = 0.0d0
 
       Mij = 1.0d0 
       do istep = 0, nt_range
@@ -44,9 +51,14 @@
 
           do js = 1, nstate
             if (.not. boundary%is_connected(js, is2)) cycle
-            do jstep = 0, istep - 1
-              Mij(istep, ib) = Mij(istep, ib) - dt * Kijk(jstep, js, ib) 
-            end do
+
+            if (istep > 0) then
+              ksum(js, ib)   = ksum(js, ib) - dt * Kijk(istep - 1, js, ib)
+              Mij(istep, ib) = Mij(istep, ib) + ksum(js, ib) 
+            end if 
+            !do jstep = 0, istep - 1
+            !  Mij(istep, ib) = Mij(istep, ib) - dt * Kijk(jstep, js, ib) 
+            !end do
             if (Mij(istep, ib) < 0.0d0) then
               if (abs(Mij(istep, ib)) > 1.0d-3) then
                 write(iw,'("Calc_Mij_from_Kijk> Error.")')
@@ -61,6 +73,8 @@
         end do
 
       end do
+
+      deallocate(ksum)
 
     end subroutine calc_Mij_from_Kijk
 !-----------------------------------------------------------------------
