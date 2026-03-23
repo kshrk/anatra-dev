@@ -19,7 +19,6 @@ module mod_analyze
     integer :: unperturbed_id = -1
     integer :: use_for_Rij    = .true.
     integer, allocatable :: data(:, :) ! (nstep, nmol)
-    integer, allocatable :: init_id(:)
   end type s_state
 
   type :: s_boundary
@@ -71,7 +70,7 @@ module mod_analyze
 
       ! Arrays
       !
-      integer,       allocatable :: init_id(:), unperturbed_ids(:), use_for_Rij(:)
+      integer,       allocatable :: unperturbed_ids(:), use_for_Rij(:)
       real(8),       allocatable :: Rij(:, :, :), Rij_int(:, :, :)
       real(8),       allocatable :: P0(:, :)
 
@@ -98,16 +97,6 @@ module mod_analyze
       Ktmp = 0.0d0
       htmp = 0.0d0
       
-      ! Read init_id file
-      !
-      if (option%read_init_id) then 
-        write(iw,*)
-        write(iw,'("Analyze> Read f_init_id file")')
-        write(iw,'("Note: init_id info. is used only if read_init_id = .true.")')
-        allocate(init_id(option%nmol))
-        call read_f_init_id(option, nfile, init_id)
-      end if
-
       ! Read Unperturbed_ID file
       !
       if (option%use_perturbed_traj) then
@@ -152,12 +141,6 @@ module mod_analyze
               iseg = iseg + 1
               !write(iw,'(">> Segment ", i0)') iseg
               call get_state(option, cv, state)
-              if (option%read_init_id) then
-                if (.not. allocated(state%init_id)) then
-                  allocate(state%init_id(option%nmol))
-                end if
-                state%init_id = init_id
-              end if
        
               state%unperturbed_id = -1
               state%use_for_Rij    = -1
@@ -206,44 +189,6 @@ module mod_analyze
         call get_state_connectivity_from_h(option, htmp, boundary)
 
       end if
-
-!        ! Initialize 
-!        !
-!        if (allocated(cv%x)) then
-!          call deallocate_cv(cv)
-!          state%nmol  = 0
-!          state%nstep = 0
-!          deallocate(state%data)
-!        end if
-!
-!        ! Read CV
-!        !
-!        write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
-!        call read_cv  (input%fcv(ifile), ndim, cv)
-!        call get_state(option, cv, state)
-!        if (option%read_init_id) then
-!          if (.not. allocated(state%init_id)) then
-!            allocate(state%init_id(option%nmol))
-!          end if
-!          state%init_id = init_id
-!        end if
-!
-!        state%unperturbed_id = -1
-!        state%use_for_Rij    = -1
-!        if (option%use_perturbed_traj) then
-!          state%unperturbed_id = unperturbed_ids(ifile)
-!          state%use_for_Rij    = use_for_Rij(ifile)
-!        end if
-!
-!        ! Update state connectivity
-!        !
-!        call get_state_connectivity(output, option, state, boundary)
-!
-!        ! Update R- and K-functions
-!        !
-!        call update_Rij_wo_normalize(option, state, Rij)
-!        call update_Kijk_wo_normalize(option, state, Ktmp, htmp)
-!      end do
 
       ! Show connectivity
       !
@@ -404,40 +349,6 @@ module mod_analyze
       end do 
 
     end subroutine get_state
-!-----------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-    subroutine read_f_init_id(option, nfile, init_id)
-!-----------------------------------------------------------------------
-      implicit none
-
-      type(s_option), intent(in)    :: option
-      integer,        intent(in)    :: nfile 
-      integer,        intent(inout) :: init_id(option%nmol)
-
-      ! I/O
-      !
-      integer :: io
-
-      ! Dummy
-      !
-      integer :: ifile, imol
-
-
-      ! Allocate
-      !
-      init_id = 0
-
-      ! Read
-      !
-      call open_file(option%f_init_id, io, stat = 'old')
-      do ifile = 1, nfile
-        read(io,*) (init_id(imol), imol = 1, option%nmol)
-      end do
-      close(io)
-      
-!
-    end subroutine read_f_init_id 
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------

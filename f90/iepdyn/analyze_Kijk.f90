@@ -15,9 +15,9 @@
       ! Local
       !
       integer :: nmol, nstep, nt_range, nt_sparse
-      integer :: init_id, unp_id
+      integer :: unp_id
       real(8) :: dt
-      logical :: is_final, is_prod, is_dissoc, use_single_event
+      logical :: is_final, is_prod, is_dissoc
 
       ! Dummy 
       !
@@ -36,7 +36,6 @@
       nt_range         = option%nt_range
       nt_sparse        = option%nt_sparse
       dt               = option%dt_out
-      use_single_event = option%use_single_event
 
       do imol = 1, nmol
 
@@ -44,12 +43,6 @@
         !
         ks = state%data(1, imol)
         js = ks
-
-        if (allocated(state%init_id)) then
-          init_id  = state%init_id(imol) 
-        else
-          init_id  = ks
-        end if
 
         ireac    = 0
         is_final = .false. 
@@ -86,14 +79,6 @@
               !if (istep == nstep) then
               if (istep == nstep .or. istep + nt_sparse > nstep) then
                 is_final = .true.
-              end if
-
-              if (use_single_event) then
-                if (ls /= init_id) then
-                  Kijk(it_diff, js, ks, ls) &
-                    = Kijk(it_diff, js, ks, ls)    - 1.0d0
-                  hit_count(ks, ls) = hit_count(ks, ls) - 1.0d0
-                end if
               end if
 
             end if
@@ -241,9 +226,9 @@
       ! Local
       !
       integer :: nmol, nstep, nt_range, nt_sparse
-      integer :: init_id, unp_id
+      integer :: unp_id
       real(8) :: dt
-      logical :: is_final, is_prod, is_dissoc, use_single_event
+      logical :: is_final, is_prod, is_dissoc
 
       ! Dummy 
       !

@@ -13,10 +13,6 @@ module mod_ctrl
   integer,      parameter, public :: MaxStates    =  100 
   integer,      parameter, public :: NotSpecified = -100
 
-  integer,      parameter, public :: KineticModeTransition = 1
-  integer,      parameter, public :: KineticModeReaction   = 2
-  character(*), parameter, public :: KineticModes(2) = (/'TRANSITION', &
-                                                         'REACTION  '/) 
   integer,      parameter, public :: InputTypeTimeSeries   = 1
   integer,      parameter, public :: InputTypeHistogram    = 2
   character(*), parameter, public :: InputTypes(2) = (/'TIMESERIES', &
@@ -29,15 +25,12 @@ module mod_ctrl
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
-    logical :: use_single_event     = .false.
-    logical :: read_init_id         = .false.
     logical :: output_histogram     = .false.
     logical :: extrapolate          = .false.
     logical :: calc_Pint            = .false.
     logical :: calc_Steady          = .false.
     logical :: check_Kijk           = .false.
 
-    integer :: kinetic_mode  = KineticModeTransition
     integer :: input_type    = InputTypeTimeSeries
 
     integer :: nmol                               = NotSpecified 
@@ -159,15 +152,12 @@ module mod_ctrl
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
-      logical :: use_single_event     = .false.
-      logical :: read_init_id         = .false.
       logical :: output_histogram     = .false.
       logical :: extrapolate          = .false.
       logical :: calc_Pint            = .false.
       logical :: calc_Steady          = .false.
       logical :: check_Kijk           = .false.
 
-      character(len=MaxChar) :: kinetic_mode     = 'TRANSITION'
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
       character(len=MaxChar) :: f_init_id        = ''
       character(len=MaxChar) :: f_unperturbed_id = '' 
@@ -201,14 +191,11 @@ module mod_ctrl
         use_reflection_state, &
         use_product_state,    &
         use_dissociate_state, &
-        use_single_event,     &
-        read_init_id,         &
         output_histogram,     &
         extrapolate,          &
         check_Kijk,           &
         calc_Pint,            &
         calc_Steady,          &
-        kinetic_mode,         &
         input_type,           &
         f_init_id,            &
         f_unperturbed_id,     &
@@ -231,23 +218,18 @@ module mod_ctrl
 
       write(iw,*)
       write(iw,'(">> Option section parameters")')
-      write(iw,'("kinetic_mode         = ", a)')     trim(kinetic_mode)
       write(iw,'("input_type           = ", a)')     trim(input_type)
 
-      if (trim(kinetic_mode) == 'REACTION') then
-        write(iw,'("use_perturbed_traj   = ", a)')   get_tof(use_perturbed_traj)
-        write(iw,'("use_reflection_state = ", a)')   get_tof(use_reflection_state)
-        write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
-        write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
-        write(iw,'("use_single_event     = ", a)')   get_tof(use_single_event)
-        write(iw,'("read_init_id         = ", a)')   get_tof(read_init_id)
-        write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
-        write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
-        write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
-        write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
-        write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
-        write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
-      end if
+      write(iw,'("use_perturbed_traj   = ", a)')   get_tof(use_perturbed_traj)
+      write(iw,'("use_reflection_state = ", a)')   get_tof(use_reflection_state)
+      write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
+      write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
+      write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
+      write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
+      write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
+      write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
+      write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
+      write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
 
       write(iw,'("extrapolate          = ", a)')     get_tof(extrapolate)
       write(iw,'("nmol                 = ", i0)')    nmol
@@ -342,12 +324,6 @@ module mod_ctrl
         option%is_initial(initial_state_ids(i)) = .true. 
       end do
 
-      iopt = get_opt(kinetic_mode, KineticModes, ierr)
-      if (ierr /= 0) then
-        write(iw,'("Read_Ctrl_Option> Error.")')
-        write(iw,'("kinetic_mode = ",a," is not available.")') trim(kinetic_mode)
-      end if
-      option%kinetic_mode = iopt
 
       iopt = get_opt(input_type, InputTypes, ierr)
       if (ierr /= 0) then
@@ -360,8 +336,6 @@ module mod_ctrl
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
-      option%use_single_event     = use_single_event
-      option%read_init_id         = read_init_id
       option%output_histogram     = output_histogram
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
