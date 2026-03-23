@@ -1009,7 +1009,7 @@ module mod_analyze
       natm = size(coord(1, :))
 
       write(io,'(a)')   trim(title)
-      write(io,'(i5)')  natm
+      write(io,'(i8)')  natm
       do iatm = 1, natm
         write(io,'(3f12.7)', advance="no") &
           coord(1:3, iatm)
