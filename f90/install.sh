@@ -89,7 +89,7 @@ list="center_of_mass          \
       histogram               \
       average_function        \
       bootstrap_prepper       \
-      trans_prob              \
+      iepdyn                  \
       return_prob             \
       restricted_radial       \
       potential_of_mean_force \

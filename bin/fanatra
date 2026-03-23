@@ -21,7 +21,7 @@ anas=("histogram"                \
       "bootstrap_prepper"        \
       "return_prob"              \
       "rprate"                   \
-      "trans_prob") 
+      "iepdyn") 
 
 anas_abbrev=("hist"                \
              "pmf"                 \
@@ -34,7 +34,7 @@ anas_abbrev=("hist"                \
 	     "boot"                \
              "rp"                  \
              "rprate"              \
-	     "tpm")
+	     "iepdyn")
 
 exes=("histogram.x"                 \
       "potential_of_mean_force.x"   \
@@ -47,7 +47,7 @@ exes=("histogram.x"                 \
       "bootstrap_prepper.x"         \
       "return_prob.x"               \
       "rprate.x"                    \
-      "trans_prob.x") 
+      "iepdyn.x") 
 
 hlp=("histogram               (hist)   : Histogram Analysis"                         \
      "potential_of_mean_force (pmf)    : Free-energy Profile Analysis"               \
@@ -60,7 +60,7 @@ hlp=("histogram               (hist)   : Histogram Analysis"                    
      "bootstrap_prepper       (boot)   : Bootstrap Sample Generator"                 \
      "return_prob             (rp)     : Returning Probability Analysis"             \
      "rprate                  (rprate) : Rate Constant Analysis based on RP theory"  \
-     "trans_prob              (tpm)    : Transition Probability Analysis")
+     "iepdyn                  (iepdyn) : Integral-equation Formalism of Population Dynamics")
 
 nanas=${#anas[@]}
 

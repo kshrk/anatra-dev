@@ -1,7 +1,7 @@
 HOME=.
 LIB=../lib
-EXEF=trans_prob.x
-TRGT=trans_prob
+EXEF=iepdyn.x
+TRGT=iepdyn
 
 # Select Fortran compiler
 #
