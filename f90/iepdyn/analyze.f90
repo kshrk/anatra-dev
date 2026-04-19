@@ -39,6 +39,11 @@ module mod_analyze
     real(8), allocatable :: hit_count(:) 
   end type s_func
 
+  type :: s_inpcond
+    integer, allocatable :: nfile_each_state(:)
+    integer, allocatable :: nfile_to_be_read(:)
+  end type s_inpcond
+
   ! subroutines
   !
   public  :: analyze
@@ -69,6 +74,7 @@ module mod_analyze
       logical                :: is_end
 
       type(s_func)     :: f
+      type(s_inpcond)  :: ic
       type(s_boundary) :: boundary
       type(s_cv)       :: cv
       type(s_state)    :: state
@@ -90,7 +96,7 @@ module mod_analyze
       nstate   = option%nstate
       nt_range = option%nt_range
 
-      ! Construct K-, R-, M-, and P0-functions
+      ! Allocate 
       !
       allocate(f%R   (0:nt_range, nstate, nstate))
       allocate(f%Rint(0:nt_range, nstate, nstate))
@@ -102,8 +108,8 @@ module mod_analyze
       f%R    = 0.0d0
       f%Rint = 0.0d0
       f%P0   = 0.0d0
-      Ktmp = 0.0d0
-      htmp = 0.0d0
+      Ktmp   = 0.0d0
+      htmp   = 0.0d0
       
       ! Read Unperturbed_ID file
       !
@@ -111,13 +117,36 @@ module mod_analyze
         write(iw,*)
         write(iw,'("Analyze> Read f_unperturbed_id file")')
         write(iw,'("Note: unperturbed state info. is used only if use_perturbed_traj = .true.")')
+
+        ! Get unperturbed state id for each file
+        !
         allocate(unperturbed_ids(nfile), use_for_Rij(nfile))
         call read_f_unperturbed_id(option, nfile, unperturbed_ids, use_for_Rij)
         do ifile = 1, nfile
           write(iw,'(3i10)') ifile, unperturbed_ids(ifile), use_for_Rij(ifile)
         end do
+       
+        ! Get # of files for each unperturbed state
+        !
+        allocate(ic%nfile_each_state(nstate))
+        allocate(ic%nfile_to_be_read(nstate))
+
+        ic%nfile_each_state = 0
+        do ifile = 1, nfile
+          is                      = unperturbed_ids(ifile)
+          ic%nfile_each_state(is) = ic%nfile_each_state(is) + 1
+        end do
+
+        ! Initial setting (will not be changed if check_senserr = .false.)
+        !
+        do is = 1, nstate
+          ic%nfile_to_be_read(is) = ic%nfile_each_state(is)  
+        end do
+
       end if
 
+      ! TODO: Following should be capsuled as a subroutine in future update 
+      !
       if (option%input_type == InputTypeTIMESERIES) then
 
         do ifile = 1, nfile
