@@ -40,11 +40,9 @@ module mod_ctrl
     integer :: product_state_ids   (MaxStates)    = NotSpecified
     integer :: dissociate_state_ids(MaxStates)    = NotSpecified
     integer :: initial_state_ids   (MaxStates)    = NotSpecified
-    integer :: sel_ijk             (3, MaxStates) = NotSpecified
 
     ! File names 
     !
-    character(len=MaxChar) :: f_init_id        = ''
     character(len=MaxChar) :: f_unperturbed_id = ''
 
     ! for time scale definition
@@ -159,7 +157,6 @@ module mod_ctrl
       logical :: check_Kijk           = .false.
 
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
-      character(len=MaxChar) :: f_init_id        = ''
       character(len=MaxChar) :: f_unperturbed_id = '' 
       
       integer :: nmol                            = NotSpecified
@@ -169,7 +166,6 @@ module mod_ctrl
       integer :: product_state_ids(MaxStates)    = NotSpecified
       integer :: dissociate_state_ids(MaxStates) = NotSpecified
       integer :: initial_state_ids(MaxStates)    = NotSpecified
-      integer :: sel_ijk(3, MaxStates)           = NotSpecified
       real(8) :: dt
       real(8) :: t_sparse
       real(8) :: t_range
@@ -197,7 +193,6 @@ module mod_ctrl
         calc_Pint,            &
         calc_Steady,          &
         input_type,           &
-        f_init_id,            &
         f_unperturbed_id,     &
         nmol,                 &
         ndim,                 &
@@ -206,7 +201,6 @@ module mod_ctrl
         product_state_ids,    &
         dissociate_state_ids, &
         initial_state_ids,    &
-        sel_ijk,              &
         dt,                   &
         t_sparse,             &
         t_range,              &
@@ -228,7 +222,6 @@ module mod_ctrl
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
       write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
-      write(iw,'("f_init_id            = ", a)')   trim(f_init_id)
       write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
 
       write(iw,'("extrapolate          = ", a)')     get_tof(extrapolate)
@@ -342,7 +335,6 @@ module mod_ctrl
       option%calc_Pint            = calc_Pint
       option%calc_Steady          = calc_Steady
 
-      option%f_init_id            = f_init_id
       option%f_unperturbed_id     = f_unperturbed_id
 
       option%nmol                 = nmol
@@ -360,8 +352,6 @@ module mod_ctrl
 
       option%ninitial             = ninitial
       option%initial_state_ids    = initial_state_ids
-
-      option%sel_ijk              = sel_ijk
 
       option%dt                   = dt
       option%t_sparse             = t_sparse

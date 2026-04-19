@@ -1,21 +1,12 @@
 !-----------------------------------------------------------------------
-    subroutine reacdyn_tcf(output, option, boundary, Rij, P0, Kijk, Mij)
+    subroutine reacdyn_tcf(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_output),   intent(in) :: output
-      type(s_option),   intent(in) :: option
-      type(s_boundary), intent(in) :: boundary
-      real(8),          intent(in) :: Rij(0:option%nt_range, &
-                                          option%nstate,     &
-                                          option%nstate)
-      real(8),          intent(in) :: P0(0:option%nt_range,  &
-                                         option%nstate)
-      real(8),          intent(in) :: Kijk(0:option%nt_range, &
-                                          option%nstate,      &
-                                          -boundary%nboundary:boundary%nboundary)
-      real(8),          intent(in) :: Mij(0:option%nt_range,  &
-                                         -boundary%nboundary:boundary%nboundary)
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -71,7 +62,7 @@
 
         do js = 1, nstate
           do istep = 0, nt_range
-            if (Kijk(istep, js, ib) > 1.0d-10 .and. nt_life < istep) then
+            if (f%K(istep, js, ib) > 1.0d-10 .and. nt_life < istep) then
               nt_life = istep 
             end if 
           end do
@@ -79,7 +70,7 @@
 
         if (option%is_initial(is1)) then
           do istep = 0, nt_range
-            if (Rij(istep, is2, is1) > 1.0d-10 .and. nt_life < istep) then
+            if (f%R(istep, is2, is1) > 1.0d-10 .and. nt_life < istep) then
               nt_life = istep
             end if
           end do
@@ -120,10 +111,10 @@
           js    = boundary%b2p(1, jb)
           jstep = 0
           do istep = 0, nt_life
-            if (Kijk(istep, is2, jb) > 1.0d-10) then
+            if (f%K(istep, is2, jb) > 1.0d-10) then
               jstep                    = jstep + 1
               tind_kfr(jstep, is2, jb) = istep
-              kfr     (jstep, is2, jb) = Kijk(istep, is2, jb)
+              kfr     (jstep, is2, jb) = f%K(istep, is2, jb)
             end if
           end do
           tind_kfr_final(is2, jb) = jstep
@@ -137,10 +128,10 @@
         if (ib == 0) cycle
         jstep = 0
         do istep = 0, nt_life
-          if (abs(Mij(istep, ib)) > 1.0d-10) then
+          if (abs(f%M(istep, ib)) > 1.0d-10) then
             jstep               = jstep + 1
             tind_mfr(jstep, ib) = istep
-            mfr     (jstep, ib) = Mij(istep, ib)
+            mfr     (jstep, ib) = f%M(istep, ib)
           end if
         end do
         tind_mfr_final(ib) = jstep
@@ -161,28 +152,28 @@
       Pi        = 0.0d0
       pint      = 0.0d0
       Qint      = 0.0d0
-      Mfinal(:) = Mij(nt_range, :) 
+      Mfinal(:) = f%M(nt_range, :) 
 
       calc_time_sta = omp_get_wtime()
 
-      !$omp parallel private(istep, jstep, it, ib, jb, is, is1, is2, js1, js2, &
-      !$omp                  inflx, jsta, it_kfr, it_mfr, it_rel, qval, pval, rval, psum)  &
-      !$omp          default(shared) 
+      !!$omp parallel private(istep, jstep, it, ib, jb, is, is1, is2, js1, js2, &
+      !!$omp                  inflx, jsta, it_kfr, it_mfr, it_rel, qval, pval, rval, psum)  &
+      !!$omp          default(shared) 
 
       it = -1
       do istep = 0, nt_extend
         it = it + 1
 
-        !$omp single
+        !!$omp single
         if (mod(istep, 1000) == 0) then
         !if (mod(istep, 1) == 0) then
           write(iw,'("Step: ", i20, " Time: ", f20.10)') istep, istep * dt
         end if
-        !$omp end single 
+        !!$omp end single 
 
         ! Calc. Q
         !
-        !$omp do schedule(dynamic) 
+        !!$omp do schedule(dynamic) 
         do ib = -nboundary, nboundary
 
           qval = 0.0d0
@@ -196,7 +187,7 @@
           is2  = boundary%b2p(2, ib)
 
           if (istep <= nt_range .and. option%is_initial(is1)) then
-            qval = qval + Rij(it, is2, is1)
+            qval = qval + f%R(it, is2, is1)
           end if
 
           if (istep == 0) then
@@ -216,25 +207,12 @@
             js1 = boundary%b2p(1, jb)
             js2 = boundary%b2p(2, jb)
 
-            ! Simple but slow algorithm 
-            ! >> Please use this part only for validation 
-            !jsta   = istep - nt_life
-            !it_rel = - 1 
-            !do jstep = max(0, jsta), istep - 1
-            !  it_rel = it_rel + 1
-            !  qval   = qval + dt * Kijk(istep - jstep, is2, jb) * Qij(it_rel, jb)
-            !end do
-
-            ! Complicated but fast algorithm 
-            !
             jsta = max(0, istep - nt_life)
             rval = 0.0d0
             do it_kfr = 1, tind_kfr_final(is2, jb)
               jstep  = tind_kfr(it_kfr, is2, jb)
               it_rel = istep - jstep - jsta
               if (it_rel < 0) exit 
-              !if (it_rel < 0) cycle 
-              !qval = qval + dt * Kijk(jstep, is2, jb) * Qij(it_rel, jb) 
               rval = rval + dt * kfr(it_kfr, is2, jb) * Qij(it_rel, jb) 
             end do
             qval = qval + rval
@@ -249,17 +227,17 @@
           end if
 
         end do  ! ib
-        !$omp end do
-        !$omp barrier
+        !!$omp end do
+        !!$omp barrier
 
         ! Calc. P
         !
-        !$omp do schedule(dynamic)
+        !!$omp do schedule(dynamic)
         do is = 1, nstate
 
           pval = 0.0d0
           if (istep <= nt_range .and. option%is_initial(is)) then
-            pval = pval + P0(it, is)
+            pval = pval + f%P0(it, is)
           end if
 
           if (istep == 0) then
@@ -267,32 +245,13 @@
             cycle
           end if
 
-          !if (istep == 0) cycle
-
           do inflx = 1, boundary%n_influx_boundary(is)
             ib = boundary%influx_boundary(inflx, is)
-
-            ! Simple but slow algorithm 
-            ! >> Please use this part only for validation
-            !
-            !jsta   = istep - nt_life
-            !it_rel = - 1 
-            !jsta   = istep - nt_life !- 1
-            !it_rel = - 1
-            !do jstep = max(0, jsta), istep - 1
-            !  it_rel = it_rel + 1
-            !  pval   = pval  &
-            !    + dt * Mij(istep - jstep, ib) * Qij(it_rel, ib)
-            !end do
-
-            ! Complicated but fast algorithm 
-            !
             jsta = max(0, istep - nt_life)
             rval = 0.0d0
             do it_mfr = 2, tind_mfr_final(ib)
               jstep  = tind_mfr(it_mfr, ib)
               it_rel = istep - jstep - jsta
-              !if (it_rel < 0) exit
               if (it_rel < 0) cycle 
               rval = rval + dt * mfr(it_mfr, ib) * Qij(it_rel, ib)
             end do
@@ -302,12 +261,12 @@
           end do
           Pi(it, is) = pval
         end do
-        !$omp end do
-        !$omp barrier
+        !!$omp end do
+        !!$omp barrier
 
         ! Output
         !
-        !$omp single
+        !!$omp single
         psum = 0.0d0
         do is = 1, nstate
           if (option%is_initial(is)) then
@@ -356,14 +315,14 @@
           !it = it - 1
 
         end if
-        !$omp end single
+        !!$omp end single
 
         if (it == nt_life) then
           it = it - 1
         end if 
 
       end do    ! istep
-      !$omp end parallel
+      !!$omp end parallel
 
       calc_time_end = omp_get_wtime()
       write(iw,'("Calculation time (sec): ", f15.7)') calc_time_end - calc_time_sta

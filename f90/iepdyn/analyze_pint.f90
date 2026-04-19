@@ -1,21 +1,12 @@
 !-----------------------------------------------------------------------
-    subroutine reacdyn_pint(output, option, boundary, Rij, P0, Kijk, Mij)
+    subroutine reacdyn_pint(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_output),   intent(in) :: output
-      type(s_option),   intent(in) :: option
-      type(s_boundary), intent(in) :: boundary
-      real(8),          intent(in) :: Rij(0:option%nt_range, &
-                                          option%nstate,     &
-                                          option%nstate)
-      real(8),          intent(in) :: P0(0:option%nt_range,  &
-                                         option%nstate)
-      real(8),          intent(in) :: Kijk(0:option%nt_range, &
-                                          option%nstate,      &
-                                          -boundary%nboundary:boundary%nboundary)
-      real(8),          intent(in) :: Mij(0:option%nt_range,  &
-                                         -boundary%nboundary:boundary%nboundary)
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -92,8 +83,8 @@
         mapb(iu)            = ib
         mapb_inv(ib)        = iu
 
-        Mu(iu) = sum(Mij(0:nt_range, ib))
-        Ru(iu) = sum(Rij(0:nt_range, is2, is1))
+        Mu(iu) = sum(f%M(0:nt_range, ib))
+        Ru(iu) = sum(f%R(0:nt_range, is2, is1))
 
         ju = 0
         do jb = -nboundary, nboundary
@@ -103,7 +94,7 @@
           js2 = boundary%b2p(2, jb)
 
           if (is1 == js2) then
-            Kuu(iu, ju) = sum(Kijk(0:nt_range, is2, jb))
+            Kuu(iu, ju) = sum(f%K(0:nt_range, is2, jb))
           end if 
         end do
       end do
@@ -118,7 +109,7 @@
           if (boundary%conv_direc(ib)) then
             jb = -ib
             ju = mapb_inv(jb)
-            Ru(ju) = sum(Rij(0:nt_range, is2, is1))
+            Ru(ju) = sum(f%R(0:nt_range, is2, is1))
             Ru(iu) = 0.0d0
 
             Kuu(ju, :) = 0.0d0
@@ -152,7 +143,7 @@
             cycle
           end if
         
-          Pint(is) = sum(P0(0:nt_range, is)) * dt
+          Pint(is) = sum(f%P0(0:nt_range, is)) * dt
           do iu = 1, nbt
             if (map(2, iu) /= is) cycle
             Pint(is) = Pint(is) + Mu(iu) * dt * Qint(iu)  
@@ -211,21 +202,21 @@
           stop
         end if
 
-        ! << DEBUG
-        write(iw,*)
-        write(iw,'("[ Eigenvalues ]")')
-        do iu = 1, nbt
-          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
-        end do
-        write(iw,*)
-        write(iw,'("[ Eigenvector corresponding to steady state]")')
-        iu = maxloc(wr(:), dim = 1)
-
-        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
-        do ju = 1, nbt
-          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
-        end do 
-        ! >> DEBUG
+!        ! << DEBUG
+!        write(iw,*)
+!        write(iw,'("[ Eigenvalues ]")')
+!        do iu = 1, nbt
+!          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
+!        end do
+!        write(iw,*)
+!        write(iw,'("[ Eigenvector corresponding to steady state]")')
+!        iu = maxloc(wr(:), dim = 1)
+!
+!        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
+!        do ju = 1, nbt
+!          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
+!        end do 
+!        ! >> DEBUG
 
         iu = maxloc(wr(:), dim = 1)
         Qinf(:) = vr(:, iu)
@@ -234,18 +225,17 @@
         do is = 1, nstate 
           do ju = 1, nbt
             if (map(2, ju) /= is) cycle 
-            !Pss(is) = Pss(is) + sum(Mu(0:nt_range, ju)) * dt * Qinf(ju) 
             Pss(is) = Pss(is) + Mu(ju) * dt * Qinf(ju) 
           end do
         end do
 
-        ! << DEBUG
-        write(iw,*)
-        write(iw,'("[ Steady state population ]")')
-        do is = 1, nstate
-          write(iw,'(i5,2x,f20.10)') is, Pss(is)
-        end do
-        ! >> DEBUG
+!        ! << DEBUG
+!        write(iw,*)
+!        write(iw,'("[ Steady state population ]")')
+!        do is = 1, nstate
+!          write(iw,'(i5,2x,f20.10)') is, Pss(is)
+!        end do
+!        ! >> DEBUG
 
         write(fname,'(a,".steady")') trim(output%fhead)
         call open_file(fname, io)
@@ -255,14 +245,12 @@
             psum = psum + Pss(is)
           end if
         end do
-!        
+
         do is = 1, nstate
           write(io,'(i5, 2x, e15.7)') is, Pss(is) / psum
         end do
-!        
+        
         close(io)
-
-
       end if
 
       ! Deallocate memory

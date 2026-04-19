@@ -257,7 +257,7 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine convert_Kijk_arrays(option, boundary, Ktmp, htmp, Kijk, hit_count)
+    subroutine convert_Kijk_arrays(option, boundary, Ktmp, htmp, f)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -267,11 +267,9 @@
                                               option%nstate,     &
                                               option%nstate,     &
                                               option%nstate)
-      real(8),          intent(in)    :: htmp(option%nstate, option%nstate)
-      real(8),          intent(inout) :: Kijk(0:option%nt_range, &
-                                              option%nstate,     &
-                                              -boundary%nboundary:boundary%nboundary)
-      real(8),          intent(inout) :: hit_count(-boundary%nboundary:boundary%nboundary)
+      real(8),          intent(in)    :: htmp(option%nstate,     &
+                                              option%nstate)
+      type(s_func),     intent(inout) :: f
 
       ! Local
       integer :: nboundary
@@ -284,36 +282,29 @@
       nboundary = boundary%nboundary
       do ib = -nboundary, nboundary
         if (ib == 0) cycle
-        is1           = boundary%b2p(1, ib)
-        is2           = boundary%b2p(2, ib)
-        hit_count(ib) = htmp(is2, is1)
+        is1             = boundary%b2p(1, ib)
+        is2             = boundary%b2p(2, ib)
+        f%hit_count(ib) = htmp(is2, is1)
 
         do inflx = 1, boundary%n_influx_boundary(is1)
           jb  = boundary%influx_boundary(inflx, is1)
           js1 = boundary%b2p(1, jb)
           js2 = boundary%b2p(2, jb)
-          Kijk(:, is2, jb) = Ktmp(:, is2, is1, js1) 
+          f%K(:, is2, jb) = Ktmp(:, is2, is1, js1) 
         end do 
       end do
 
-!
     end subroutine convert_Kijk_arrays
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine normalize_Kijk(option, boundary, Kijk, hit_count)
+    subroutine normalize_Kijk(option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary 
-      real(8),          intent(inout) :: Kijk(0:option%nt_range,        &
-                                             option%nstate,             &
-                                             -boundary%nboundary:       &
-                                              boundary%nboundary)
-      real(8),          intent(inout) :: hit_count(-boundary%nboundary: &
-                                                    boundary%nboundary)
-                                           
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f 
 
 
       ! Local
@@ -343,17 +334,15 @@
           cycle
         end if
 
-        is1 = boundary%b2p(1, ib)
-        is2 = boundary%b2p(2, ib)
-
-        state_sum      = hit_count(ib)
+        is1       = boundary%b2p(1, ib)
+        is2       = boundary%b2p(2, ib)
+        state_sum = f%hit_count(ib)
 
         if (state_sum < 1.0d-10) then
-          Kijk(:, :, ib) = 0.0d0
+          f%K(:, :, ib) = 0.0d0
         else 
-          Kijk(:, :, ib) = Kijk(:, :, ib) / (state_sum * dt) 
+          f%K(:, :, ib) = f%K(:, :, ib) / (state_sum * dt) 
         end if
-
       end do
 
       ! Report Hit counts
@@ -368,7 +357,7 @@
         is1 = boundary%b2p(1, ib)
         is2 = boundary%b2p(2, ib)
 
-        write(iw,'(i5,i5," : ", f20.10)') is2, is1, hit_count(ib) 
+        write(iw,'(i5,i5," : ", f20.10)') is2, is1, f%hit_count(ib) 
       end do
       write(iw,*)
       
@@ -377,79 +366,14 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine renormalize_Kijk(option, boundary, Kijk)
+    subroutine write_Kijk(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
+      type(s_output),   intent(in)    :: output
       type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary 
-      real(8),          intent(inout) :: Kijk(0:option%nt_range,        &
-                                             option%nstate,             &
-                                             -boundary%nboundary:       &
-                                              boundary%nboundary)
-
-
-      ! Local
-      !
-      integer :: nt_range, nstate, nboundary
-      real(8) :: dt
-
-      ! Dummy
-      !
-      integer :: istep, is, is1, is2, js, ib
-      real(8) :: state_sum
-
-
-      ! Setup
-      !
-      nstate    = option%nstate
-      nt_range  = option%nt_range
-      nstate    = option%nstate
-      nboundary = boundary%nboundary 
-      dt        = option%dt_out
-
-      do ib = -nboundary, nboundary
-
-        if (ib == 0) then
-          cycle
-        end if
-
-        is1 = boundary%b2p(1, ib)
-        is2 = boundary%b2p(2, ib)
-
-        if (.not. option%is_dissoc(is2)) then 
-          state_sum = 0.0d0
-          do js = 1, nstate
-            if (.not. boundary%is_connected(js, is2)) cycle 
-            do istep = 0, nt_range
-              state_sum = state_sum + Kijk(istep, js, ib)
-            end do
-          end do
-
-          if (state_sum > 1.0d-10) then
-            Kijk(:, :, ib) = Kijk(:, :, ib) / (state_sum * dt)
-          else
-            Kijk(:, :, ib) = 0.0d0
-          end if 
-
-        end if
-
-      end do
-
-    end subroutine renormalize_Kijk
-!-----------------------------------------------------------------------
-
-!-----------------------------------------------------------------------
-    subroutine write_Kijk(output, option, boundary, Kijk)
-!-----------------------------------------------------------------------
-      implicit none
-
-      type(s_output),   intent(in) :: output
-      type(s_option),   intent(in) :: option
-      type(s_boundary), intent(in) :: boundary
-      real(8),          intent(in) :: Kijk(0:option%nt_range,  &
-                                           option%nstate,      &
-                                          -boundary%nboundary:boundary%nboundary)
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -511,7 +435,7 @@
 
           do js = 1, nstate
             if (boundary%is_connected(js, is2)) then
-              write(io,'(e15.7,2x)', advance = 'no') Kijk(istep, js, ib)
+              write(io,'(e15.7,2x)', advance = 'no') f%K(istep, js, ib)
             end if 
           end do
         end do
@@ -523,18 +447,13 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine check_Kijk(option, boundary, Kijk)
+    subroutine check_Kijk(option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary 
-      real(8),          intent(inout) :: Kijk(0:option%nt_range,        &
-                                             option%nstate,             &
-                                             -boundary%nboundary:       &
-                                              boundary%nboundary)
-                                           
-
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f 
 
       ! Local
       !
@@ -569,16 +488,11 @@
         state_sum = 0.0d0
         do js = 1, nstate
           if (boundary%is_connected(js, is2)) then
-            state_sum = state_sum + sum(Kijk(:, js, ib)) * dt
-            !if (state_sum < 1.0d-6) then
-            !  write(iw,'("Check_Kijk> Warning.")')
-            !  write(iw,'("K(",i0,2x,i0,2x,i0,") is zero")') js, is2, is1
-            !end if 
+            state_sum = state_sum + sum(f%K(:, js, ib)) * dt
           end if
         end do
-
-        write(iw,'("Kint value at Boundary ", i5, i5, " : ", f15.7)') is2, is1, state_sum
-
+        write(iw,'("Kint value at Boundary ", i5, i5, " : ", f15.7)') &
+              is2, is1, state_sum
       end do
 
     end subroutine check_Kijk

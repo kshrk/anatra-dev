@@ -1,13 +1,11 @@
 !-----------------------------------------------------------------------
-    subroutine update_Rij_wo_normalize(option, state, Rij)
+    subroutine update_Rij_wo_normalize(option, state, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option), intent(in)    :: option
       type(s_state),  intent(in)    :: state
-      real(8),        intent(inout) :: Rij(0:option%nt_range, &
-                                           option%nstate,     &
-                                           option%nstate)
+      type(s_func),   intent(inout) :: f
 
       ! Local
       !
@@ -40,11 +38,7 @@
 
         if (.not. option%is_initial(js)) cycle
 
-        !if (js /= unp_id .and. unp_id /= -1 .and. & 
-        !    .not. (use_for_Rij == -1 .or. use_for_Rij == 1)) return
         if (.not. (use_for_Rij == -1 .or. use_for_Rij == 1)) return
-
-        !write(iw,'("Update_Rij_wo_Normalize> Update Rij")')
 
         it_reac = 0 
         do istep = nt_sparse + 1, nstep, nt_sparse
@@ -55,7 +49,6 @@
           end if
         end do
 
-        !if (option%is_initial(js) .and. it_reac == 0) then
         if (it_reac == 0) then
           write(iw,'("Calc_Rij_wo_normalize> ")')
           write(iw,'("Molecule ", i5, ": No reaction is observed.")') imol
@@ -67,7 +60,7 @@
         do istep = 0, it_reac, nt_sparse
           it_diff              = it_reac - istep 
           it_diff              = int(it_diff / dble(nt_sparse))
-          Rij(it_diff, is, js) = Rij(it_diff, is, js) + 1.0d0
+          f%R(it_diff, is, js) = f%R(it_diff, is, js) + 1.0d0
         end do
 
       end do
@@ -76,15 +69,13 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine update_Rij_from_hist(io, option, Rij)
+    subroutine update_Rij_from_hist(io, option, f)
 !-----------------------------------------------------------------------
       implicit none
 
       integer,        intent(in)    :: io
       type(s_option), intent(in)    :: option
-      real(8),        intent(inout) :: Rij(0:option%nt_range, &
-                                           option%nstate,     &
-                                           option%nstate)
+      type(s_func),   intent(inout) :: f
 
       ! Local
       !
@@ -100,7 +91,7 @@
 
       do while (.true.)
        read(io,*,end=100) is, js, istep, val
-       Rij(istep, is, js) = Rij(istep, is, js) + val
+       f%R(istep, is, js) = f%R(istep, is, js) + val
       end do
  100  return 
 
@@ -108,15 +99,12 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine normalize_Rij(option, Rij)
+    subroutine normalize_Rij(option, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option), intent(in)    :: option
-      real(8),        intent(inout) :: Rij(0:option%nt_range, &
-                                           option%nstate,     &
-                                           option%nstate)
-
+      type(s_func),   intent(inout) :: f
 
       ! Local
       !
@@ -139,7 +127,7 @@
       do js = 1, nstate
 
         if (.not. option%is_initial(js)) then
-          Rij(:, :, js) = 0.0d0
+          f%R(:, :, js) = 0.0d0
           cycle
         end if 
 
@@ -148,13 +136,13 @@
         state_sum = 0.0d0
         do is = 1, nstate
           if (is /= js) then
-            state_sum = state_sum + sum(Rij(:, is, js)) 
+            state_sum = state_sum + sum(f%R(:, is, js)) 
           end if
         end do
 
         do is = 1, nstate
           if (is /= js) then
-            Rij(:, is, js) = weight * Rij(:, is, js) / (state_sum * dt) 
+            f%R(:, is, js) = weight * f%R(:, is, js) / (state_sum * dt) 
           end if
         end do
       end do 
@@ -164,18 +152,12 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine running_integral_Rij(option, Rij, Rij_int)
+    subroutine running_integral_Rij(option, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option), intent(in)    :: option
-      real(8),        intent(inout) :: Rij(0:option%nt_range, &
-                                           option%nstate,     &
-                                           option%nstate)
-      real(8),        intent(inout) :: Rij_int(0:option%nt_range, &
-                                               option%nstate,     &
-                                               option%nstate)
-
+      type(s_func),   intent(inout) :: f
 
       ! Local
       !
@@ -195,15 +177,15 @@
       nstate   = option%nstate
       dt       = option%dt_out
 
-      Rij_int  = 0.0d0
+      f%Rint  = 0.0d0
       do js = 1, nstate
         do is = 1, nstate
           if (is /= js) then
             prev = 0.0d0
             do istep = 0, nt_range - 1
-              now                        = prev + Rij(istep, is, js) * dt
-              prev                       = now
-              Rij_int(istep + 1, is, js) = now 
+              now                       = prev + f%R(istep, is, js) * dt
+              prev                      = now
+              f%Rint(istep + 1, is, js) = now 
             end do
           end if
         end do
@@ -214,20 +196,14 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine write_Rij(output, option, boundary, Rij, Rij_int)
+    subroutine write_Rij(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_output),   intent(in) :: output
       type(s_option),   intent(in) :: option
       type(s_boundary), intent(in) :: boundary
-      real(8),          intent(in) :: Rij(0:option%nt_range, &
-                                          option%nstate,     &
-                                          option%nstate)
-      real(8),          intent(in) :: Rij_int(0:option%nt_range, &
-                                              option%nstate,     &
-                                              option%nstate)
-
+      type(s_func),     intent(in) :: f
 
       ! I/O
       !
@@ -272,8 +248,8 @@
           if (option%is_initial(js)) then
             do is = 1, nstate
               if (boundary%is_connected(is, js)) then
-                write(io,'(e15.7,2x)', advance = 'no') Rij    (istep, is, js) 
-                write(io,'(e15.7,2x)', advance = 'no') Rij_int(istep, is, js) 
+                write(io,'(e15.7,2x)', advance = 'no') f%R   (istep, is, js) 
+                write(io,'(e15.7,2x)', advance = 'no') f%Rint(istep, is, js) 
               end if
             end do
           end if
@@ -283,20 +259,17 @@
 
       close(io) 
 
-
     end subroutine write_Rij
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine output_Rij_hist(option, output, Rij)
+    subroutine output_Rij_hist(option, output, f)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_option), intent(in) :: option
-      type(s_output), intent(in) :: output
-      real(8),        intent(in) :: Rij(0:option%nt_range, &
-                                        option%nstate,     &
-                                        option%nstate)
+      type(s_option), intent(in)    :: option
+      type(s_output), intent(in)    :: output
+      type(s_func),   intent(inout) :: f 
 
       ! I/O
       !
@@ -318,7 +291,7 @@
       nstate   = option%nstate
       nt_range = option%nt_range
 
-      val = sum(Rij(:, :, :))
+      val = sum(f%R(:, :, :))
       if (val < 0.999d0) then
         return
       end if
@@ -331,7 +304,7 @@
       do js = 1, nstate
       do is = 1, nstate
       do istep = 0, nt_range
-        val = Rij(istep, is, js)
+        val = f%R(istep, is, js)
         if (val >= 0.999d0) then
           write(io, '(i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, istep, val
         end if
@@ -340,7 +313,6 @@
       end do 
 
       close(io)
-
 
     end subroutine output_Rij_hist
 !-----------------------------------------------------------------------

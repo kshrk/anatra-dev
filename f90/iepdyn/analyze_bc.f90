@@ -1,16 +1,12 @@
 !-----------------------------------------------------------------------
-    subroutine set_reflection(output, option, boundary, Kijk, Mij)
+    subroutine set_reflection(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_output),   intent(in)    :: output
       type(s_option),   intent(in)    :: option
       type(s_boundary), intent(inout) :: boundary
-      real(8),          intent(inout) :: Kijk(0:option%nt_range, &
-                                             option%nstate,     &
-                                             -boundary%nboundary:boundary%nboundary)
-      real(8),          intent(inout) :: Mij(0:option%nt_range,  &
-                                            -boundary%nboundary:boundary%nboundary)
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -46,17 +42,14 @@
 
       do iref = 1, option%nreflect
         is = option%reflection_state_ids(iref)
-
         do js = 1, nstate
-
           ib = boundary%p2b(is, js)
-
           if (ib == 0) cycle
 
           ! Erase transitions from reflection state
           !
-          Kijk(:, :, ib) = 0.0d0
-          Mij(:, ib)     = 0.0d0
+          f%K(:, :, ib) = 0.0d0
+          f%M(:, ib)    = 0.0d0
 
           ! Invert directions
           !
@@ -70,18 +63,14 @@
 !-----------------------------------------------------------------------
 !
 !-----------------------------------------------------------------------
-    subroutine set_product(output, option, boundary, Kijk, Mij)
+    subroutine set_product(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_output),   intent(in)    :: output
       type(s_option),   intent(in)    :: option
       type(s_boundary), intent(inout) :: boundary
-      real(8),          intent(inout) :: Kijk(0:option%nt_range, &
-                                              option%nstate,     &
-                                             -boundary%nboundary:boundary%nboundary)
-      real(8),          intent(inout) :: Mij(0:option%nt_range,   &
-                                           -boundary%nboundary:boundary%nboundary)
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -124,11 +113,10 @@
           ! Erase transitions from reflection product i 
           ! (X<---i<---j, X<---j<---i)
           !
-          Kijk(:, :, ib)  = 0.0d0
-          !Mij(:, ib)      = 0.0d0
-          Mij(:, ib)      = 1.0d0
-          Kijk(:, :, -ib) = 0.0d0
-          Mij(:, -ib)     = 0.0d0
+          f%K(:, :, ib)  = 0.0d0
+          f%M(:, ib)     = 1.0d0
+          f%K(:, :, -ib) = 0.0d0
+          f%M(:, -ib)    = 0.0d0
 
         end do
         

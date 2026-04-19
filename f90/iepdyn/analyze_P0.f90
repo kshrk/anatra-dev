@@ -1,16 +1,11 @@
 !-----------------------------------------------------------------------
-    subroutine calc_P0_from_Rij(option, boundary, Rij, P0)
+    subroutine calc_P0_from_Rij(option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),   intent(in)    :: option
       type(s_boundary), intent(in)    :: boundary
-      real(8),          intent(in)    :: Rij(0:option%nt_range, &
-                                             option%nstate,     &
-                                             option%nstate)
-      real(8),          intent(inout) :: P0(0:option%nt_range,  &
-                                          option%nstate)
-
+      type(s_func),     intent(inout) :: f
 
       ! Local
       !
@@ -37,19 +32,18 @@
       allocate(rsum(nstate, nstate))
       rsum = 0.0d0
 
-      P0 = 0.0d0
+      f%P0 = 0.0d0
       do is = 1, nstate
         if (.not. option%is_initial(is)) cycle
 
-        weight    = option%state_weight(is) 
-        P0(:, is) = weight
+        weight      = option%state_weight(is) 
+        f%P0(:, is) = weight
         do js = 1, nstate
           if (.not. boundary%is_connected(js, is)) cycle
 
           do istep = 1, nt_range
-            rsum(js, is)  = rsum(js, is) - dt * Rij(istep - 1, js, is)
-            P0(istep, is) = P0(istep, is) + rsum(js, is)
-            !P0(istep, is) = P0(istep, is) - dt * sum(Rij(0:istep - 1, js, is))
+            rsum(js, is)    = rsum(js, is) - dt * f%R(istep - 1, js, is)
+            f%P0(istep, is) = f%P0(istep, is) + rsum(js, is)
           end do
         end do
 
@@ -61,14 +55,13 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine write_P0(output, option, P0)
+    subroutine write_P0(output, option, f)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_output),   intent(in) :: output
-      type(s_option),   intent(in) :: option
-      real(8),          intent(in) :: P0(0:option%nt_range, &
-                                         option%nstate)
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -104,7 +97,7 @@
         write(io,'(f20.10)', advance = 'no') option%dt_out * istep 
         do is = 1, nstate
           if (option%is_initial(is)) then
-            write(io,'(e15.7,2x)', advance = 'no') P0(istep, is) 
+            write(io,'(e15.7,2x)', advance = 'no') f%P0(istep, is) 
           end if
         end do
         write(io,*)

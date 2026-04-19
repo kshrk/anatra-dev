@@ -8,10 +8,10 @@ module mod_analyze
   use mod_output
   use mod_ctrl
 
-  ! constants
+  ! Constants
   !
 
-  ! structures
+  ! Structures
   !
   type :: s_state
     integer :: nmol
@@ -30,6 +30,14 @@ module mod_analyze
     integer, allocatable :: influx_boundary(:, :)
     logical, allocatable :: conv_direc(:)
   end type s_boundary
+
+  type :: s_func
+    real(8), allocatable :: K(:, :, :)
+    real(8), allocatable :: M(:, :)
+    real(8), allocatable :: P0(:, :)
+    real(8), allocatable :: R(:, :, :), Rint(:, :, :)
+    real(8), allocatable :: hit_count(:) 
+  end type s_func
 
   ! subroutines
   !
@@ -60,6 +68,7 @@ module mod_analyze
       integer                :: nboundary
       logical                :: is_end
 
+      type(s_func)     :: f
       type(s_boundary) :: boundary
       type(s_cv)       :: cv
       type(s_state)    :: state
@@ -70,14 +79,8 @@ module mod_analyze
 
       ! Arrays
       !
-      integer,       allocatable :: unperturbed_ids(:), use_for_Rij(:)
-      real(8),       allocatable :: Rij(:, :, :), Rij_int(:, :, :)
-      real(8),       allocatable :: P0(:, :)
-
-      real(8),       allocatable :: Kijk(:, :, :), hit_count(:)
-      real(8),       allocatable :: Mij(:, :)
-
-      real(8),       allocatable :: Ktmp(:, :, :, :), htmp(:, :)
+      integer, allocatable :: unperturbed_ids(:), use_for_Rij(:)
+      real(8), allocatable :: Ktmp(:, :, :, :), htmp(:, :)
 
 
       ! Setup
@@ -89,11 +92,16 @@ module mod_analyze
 
       ! Construct K-, R-, M-, and P0-functions
       !
-      allocate(Rij(0:nt_range, nstate, nstate))
+      allocate(f%R   (0:nt_range, nstate, nstate))
+      allocate(f%Rint(0:nt_range, nstate, nstate))
+      allocate(f%P0  (0:nt_range, nstate))
+
       allocate(Ktmp(0:nt_range, nstate, nstate, nstate))
       allocate(htmp(nstate, nstate))
 
-      Rij  = 0.0d0
+      f%R    = 0.0d0
+      f%Rint = 0.0d0
+      f%P0   = 0.0d0
       Ktmp = 0.0d0
       htmp = 0.0d0
       
@@ -139,7 +147,6 @@ module mod_analyze
        
             if (cv%nstep /= 0) then
               iseg = iseg + 1
-              !write(iw,'(">> Segment ", i0)') iseg
               call get_state(option, cv, state)
        
               state%unperturbed_id = -1
@@ -155,7 +162,7 @@ module mod_analyze
        
               ! Update R- and K-functions
               !
-              call update_Rij_wo_normalize(option, state, Rij)
+              call update_Rij_wo_normalize(option, state, f)
               call update_Kijk_wo_normalize(option, state, Ktmp, htmp)
             end if
        
@@ -166,12 +173,11 @@ module mod_analyze
         end do
 
         if (option%output_histogram) then
-          call output_Rij_hist(option, output, Rij)
+          call output_Rij_hist(option, output, f)
           call output_Kijk_hist(option, output, Ktmp, htmp)
         end if
 
       else if (option%input_type == InputTypeHISTOGRAM) then
-
         do ifile = 1, nfile
           write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
           iseg   = 0
@@ -181,13 +187,11 @@ module mod_analyze
           if (trim(line) == 'KIJK') then
             call update_Kijk_from_hist(io, option, ktmp, htmp) 
           else if (trim(line) == 'RIJ') then
-            call update_Rij_from_hist(io, option, Rij) 
+            call update_Rij_from_hist(io, option, f) 
           end if
           close(io)
         end do
-
         call get_state_connectivity_from_h(option, htmp, boundary)
-
       end if
 
       ! Show connectivity
@@ -206,57 +210,61 @@ module mod_analyze
 
       ! Convert arrays
       !
-      allocate(Kijk(0:nt_range, nstate, -nboundary:nboundary))
-      allocate(hit_count(-nboundary:nboundary))
-      call convert_Kijk_arrays(option, boundary, Ktmp, htmp, Kijk, hit_count)
+      allocate(f%K(0:nt_range, nstate, -nboundary:nboundary))
+      allocate(f%M(0:nt_range, -nboundary:nboundary))
+      allocate(f%hit_count(-nboundary:nboundary))
+
+      f%K         = 0.0d0
+      f%M         = 0.0d0
+      f%hit_count = 0.0d0
+
+      call convert_Kijk_arrays(option, boundary, Ktmp, htmp, f)
 
       ! Normalize R- and K-functions
       ! 
-      call normalize_Rij(option, Rij)
-      call normalize_Kijk(option, boundary, Kijk, hit_count)
+      call normalize_Rij(option, f)
+      call normalize_Kijk(option, boundary, f)
 
       ! Check Kijk
       !
-      call check_Kijk(option, boundary, Kijk)
+      call check_Kijk(option, boundary, f)
 
       ! Compute R-integration and P0
       !
       write(iw,*)
       write(iw,'("Analyze> Calculate P0 from Rij")')
-      allocate(Rij_int(0:nt_range, nstate, nstate))
-      allocate(P0     (0:nt_range, nstate))
-      call running_integral_Rij(option, Rij, Rij_int)
-      call calc_P0_from_Rij    (option, boundary, Rij, P0)
+
+      call running_integral_Rij(option, f)
+      call calc_P0_from_Rij    (option, boundary, f)
       write(iw,'(">> Done")')
 
       ! Compute Mij
       !
       write(iw,*)
       write(iw,'("Analyze> Calculate Mjk from Kijk")')
-      allocate(Mij (0:nt_range, -nboundary:nboundary))
-      call calc_Mij_from_Kijk(option, boundary, Kijk, Mij)
+      call calc_Mjk_from_Kijk(option, boundary, f)
       write(iw,'(">> Done")')
 
       ! Output
       !
       write(iw,*)
       write(iw,'("Analyze> Print out TCFs")')
-      call write_Rij   (output, option, boundary, Rij, Rij_int)
-      call write_P0    (output, option, P0)
-      call write_Kijk  (output, option, boundary, Kijk)
-      call write_Mij   (output, option, boundary, Mij)
+      call write_Rij   (output, option, boundary, f)
+      call write_P0    (output, option, f)
+      call write_Kijk  (output, option, boundary, f)
+      call write_Mjk   (output, option, boundary, f)
       write(iw,'(">> Done")')
 
       ! Setup Boundary conditions 
       !
       write(iw,*)
       write(iw,'("Analyze> Setup boundary conditions")')
-      call set_reflection(output, option, boundary, Kijk, Mij)
-      call set_product   (output, option, boundary, Kijk, Mij)
+      call set_reflection(output, option, boundary, f) 
+      call set_product   (output, option, boundary, f)
       write(iw,'(">> Done")')
 
       if (option%calc_Pint .or. option%calc_Steady) then
-        call reacdyn_pint(output, option, boundary, Rij, P0, Kijk, Mij)
+        call reacdyn_pint(output, option, boundary, f)
       end if
 
       if (option%extrapolate) then
@@ -264,14 +272,9 @@ module mod_analyze
         write(iw,*)
         write(iw,'("Analyze> Start propagation")')
 
-        ! Setup Boundary conditions 
-        !
-        !call set_reflection(output, option, boundary, Kijk, Mij)
-        !call set_product   (output, option, boundary, Kijk, Mij)
-        
         ! Extend timescale 
         !
-        call reacdyn_tcf(output, option, boundary, Rij, P0, Kijk, Mij)
+        call reacdyn_tcf(output, option, boundary, f)
 
         write(iw,'(">> Done")')
 
@@ -341,7 +344,8 @@ module mod_analyze
 
           if (state%data(istep, imol) == - 1) then
             write(iw,'("Get_State> Error.")')
-            write(iw,'("State determination failed. Please check state definition.")')
+            write(iw,'("State determination failed. &
+                       &Please check state definition.")')
             stop
           end if
 

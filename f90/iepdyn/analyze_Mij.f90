@@ -1,15 +1,11 @@
 !-----------------------------------------------------------------------
-    subroutine calc_Mij_from_Kijk(option, boundary, Kijk, Mij)
+    subroutine calc_Mjk_from_Kijk(option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary 
-      real(8),          intent(in)    :: Kijk(0:option%nt_range, &
-                                             option%nstate,     &
-                                             -boundary%nboundary:boundary%nboundary)
-      real(8),          intent(inout) :: Mij(0:option%nt_range, &
-                                            -boundary%nboundary:boundary%nboundary) 
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f 
 
       ! Local
       !
@@ -40,7 +36,7 @@
       allocate(ksum(nstate, -nboundary:nboundary))
       ksum = 0.0d0
 
-      Mij = 1.0d0 
+      f%M = 1.0d0 
       do istep = 0, nt_range
 
         do ib = -nboundary, nboundary
@@ -53,19 +49,17 @@
             if (.not. boundary%is_connected(js, is2)) cycle
 
             if (istep > 0) then
-              ksum(js, ib)   = ksum(js, ib) - dt * Kijk(istep - 1, js, ib)
-              Mij(istep, ib) = Mij(istep, ib) + ksum(js, ib) 
+              ksum(js, ib)   = ksum(js, ib) - dt * f%K(istep - 1, js, ib)
+              f%M(istep, ib) = f%M(istep, ib) + ksum(js, ib) 
             end if 
-            !do jstep = 0, istep - 1
-            !  Mij(istep, ib) = Mij(istep, ib) - dt * Kijk(jstep, js, ib) 
-            !end do
-            if (Mij(istep, ib) < 0.0d0) then
-              if (abs(Mij(istep, ib)) > 1.0d-3) then
-                write(iw,'("Calc_Mij_from_Kijk> Error.")')
+
+            if (f%M(istep, ib) < 0.0d0) then
+              if (abs(f%M(istep, ib)) > 1.0d-3) then
+                write(iw,'("Calc_Mjk_from_Kijk> Error.")')
                 write(iw,'("Negative population has been detected. stop")')
                 stop
               else
-                Mij(istep, ib) = 0.0d0
+                f%M(istep, ib) = 0.0d0
               end if 
             end if
           end do
@@ -76,19 +70,18 @@
 
       deallocate(ksum)
 
-    end subroutine calc_Mij_from_Kijk
+    end subroutine calc_Mjk_from_Kijk
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine write_Mij(output, option, boundary, Mij)
+    subroutine write_Mjk(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_output),   intent(in) :: output
-      type(s_option),   intent(in) :: option
-      type(s_boundary), intent(in) :: boundary
-      real(8),          intent(in) :: Mij(0:option%nt_range, &
-                                         -boundary%nboundary:boundary%nboundary)
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f
 
       ! I/O
       !
@@ -112,12 +105,10 @@
 
       write(fname, '(a,".Mij")') trim(output%fhead)
       call open_file(fname, io)
-      
       write(io,'("# ib")')
 
       id = 1
       do ib = -nboundary, nboundary
-
         if (ib == 0) then
           cycle
         end if
@@ -132,20 +123,16 @@
 
       do istep = 0, nt_range
         write(io,'(f20.10)', advance = 'no') option%dt_out * istep
-
         do ib = -nboundary, nboundary
-          
           if (ib == 0) then
             cycle
           end if
-
-          write(io,'(e15.7,2x)', advance = 'no') Mij(istep, ib)
-
+          write(io,'(e15.7,2x)', advance = 'no') f%M(istep, ib)
         end do
         write(io,*)
       end do
 
       close(io) 
 
-    end subroutine write_Mij
+    end subroutine write_Mjk
 !-----------------------------------------------------------------------
