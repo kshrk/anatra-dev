@@ -33,9 +33,22 @@
       nt_sparse = option%nt_sparse
       dt        = option%dt_out
 
-      allocate(ksum(nstate, -nboundary:nboundary))
+      ! Allocate
+      !
+      if (.not. allocated(f%M)) then
+        allocate(f%M(0:nt_range, -nboundary:nboundary))
+        f%M = 0.0d0
+      end if
+
+      ! Allocate work space
+      !
+      if (.not. allocated(ksum)) then
+        allocate(ksum(nstate, -nboundary:nboundary))
+      end if
       ksum = 0.0d0
 
+      ! Calculate M from K
+      !
       f%M = 1.0d0 
       do istep = 0, nt_range
 

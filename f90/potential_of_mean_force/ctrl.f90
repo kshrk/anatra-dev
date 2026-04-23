@@ -12,15 +12,21 @@ module mod_ctrl
 
   ! constants
   !
-  integer, parameter, public :: MaxDim   = 3
-  integer, parameter, public :: MaxState = 100 
-  integer, parameter, public :: MaxNcell = 100 
+  integer,      parameter, public :: MaxDim   = 3
+  integer,      parameter, public :: MaxState = 100 
+  integer,      parameter, public :: MaxNcell = 100
+                
+  integer,      parameter, public :: DiscretizeSchemeCenter  = 1 
+  integer,      parameter, public :: DiscretizeSchemeForward = 2
+  character(*), parameter, public :: DiscretizeSchemes(2) = (/'CENTER ', &
+                                                              'FORWARD'/)  
 
   ! structures
   !
 
   type :: s_option
 
+    logical :: discretize_scheme      = DiscretizeSchemeCenter
     logical :: use_bootstrap          = .false.
     logical :: gen_script_mpl2d       = .false.
     logical :: skip_calc              = .false.
@@ -146,6 +152,8 @@ module mod_ctrl
 
       ! Local
       !
+      character(len=MaxChar) :: discretize_scheme = 'CENTER' 
+
       logical :: use_bootstrap              = .false.
       logical :: gen_script_mpl2d           = .false.
       logical :: skip_calc                  = .false.
@@ -193,12 +201,17 @@ module mod_ctrl
       real(8) :: vr_normvec(3)              = (/1.0d0, 1.0d0, 1.0d0/)
       real(8) :: vr_cellpos(3, MaxNcell)    = 0.0d0
 
+      ! Parser 
+      !
+      integer :: iopt, ierr
+
       ! Dummy
       !
       integer :: i, j, k 
 
 
       namelist /option_param/   &
+        discretize_scheme,      &
         use_bootstrap,          &
         gen_script_mpl2d,       &
         skip_calc,              &
@@ -238,6 +251,7 @@ module mod_ctrl
 
       write(iw,*)
       write(iw,'(">> Option section parameters")')
+      write(iw,'("discretize_scheme = ", a)')               trim(discretize_scheme)
       write(iw,'("use_bootstrap     = ", a)')               get_tof(use_bootstrap) 
       write(iw,'("skip_calc         = ", a)')               get_tof(skip_calc)
 
@@ -290,6 +304,16 @@ module mod_ctrl
         end if
 
       end if
+
+      ! Get Discretize_scheme 
+      !
+      iopt = get_opt(discretize_scheme, DiscretizeSchemes, ierr)
+      if (ierr /= 0) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("discretize_scheme = ",a," is not available.")') trim(discretize_scheme)
+        stop
+      end if
+      option%discretize_scheme = iopt
 
       ! Memory allocation
       !

@@ -1,16 +1,11 @@
 !-----------------------------------------------------------------------
-    subroutine update_Kijk_wo_normalize(option, state, Kijk, hit_count)
+    subroutine update_Kijk_wo_normalize(option, state, fwrk)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),   intent(in)    :: option
       type(s_state),    intent(in)    :: state
-      real(8),          intent(inout) :: Kijk(0:option%nt_range,        &
-                                             option%nstate,             &
-                                             option%nstate,             &
-                                             option%nstate)
-      real(8),          intent(inout) :: hit_count(option%nstate,       &
-                                                   option%nstate)
+      type(s_fwrk),     intent(inout) :: fwrk
 
       ! Local
       !
@@ -22,7 +17,7 @@
       ! Dummy 
       !
       integer :: istep, jstep, imol
-      integer :: is, js, ks, ls, ib, jb
+      integer :: is, js, ks, ls, ib, jb, ik
       integer :: it, it_reac, it_diff, nt
       integer :: ista, iend, ireac
       integer :: iprod, idissoc
@@ -55,20 +50,34 @@
               ista              = istep - nt_sparse
               js                = is
               if (unp_id == js .or. unp_id == -1) then 
-                hit_count(js, ks) = hit_count(js, ks) + 1.0d0
+                fwrk%h(js, ks) = fwrk%h(js, ks) + 1.0d0
               end if
             else
               iend    = istep - nt_sparse 
               it_diff = iend - ista
               it_diff = int(it_diff / dble(nt_sparse))
 
-              if (unp_id == js .or. unp_id == -1) then 
-                Kijk(it_diff, is, js, ks) &
-                        = Kijk(it_diff, is, js, ks) + 1.0d0
+              if (unp_id == js .or. unp_id == -1) then
+                ik = fwrk%kmesh(is, js, ks)
+                if (ik == 0) then
+                  fwrk%nk              = fwrk%nk + 1
+                  ik                   = fwrk%nk 
+                  fwrk%kmesh(is, js, ks) = ik
+
+                  if (ik >= fwrk%nkmax) then
+                    write(iw,'("Update_Kijk_wo_Normalize> Error.")')
+                    write(iw,'("# of elements exceeded array size of K &
+                               &specified by nkmax = ", i0)') fwrk%nkmax
+                    write(iw,'("Please specify larger nkmax value in \&option_param section")')
+                    stop
+                  end if
+
+                end if 
+                fwrk%K(it_diff, ik) = fwrk%K(it_diff, ik) + 1.0d0
               end if
 
               if (unp_id == is .or. unp_id == -1) then
-                hit_count(is, js) = hit_count(is, js) + 1.0d0
+                fwrk%h(is, js) = fwrk%h(is, js) + 1.0d0
               end if
 
               ls      = ks
@@ -120,11 +129,11 @@
 
         if (option%is_dissoc(js)) then
           if (is_final .and. (unp_id == js .or. unp_id == -1)) then
-            hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+            fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
           end if
         else
           if (unp_id == js .or. unp_id == -1) then
-            hit_count(js, ks) = hit_count(js, ks) - 1.0d0
+            fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
           end if
         end if
 
@@ -210,18 +219,13 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine update_Kijk_from_hist(io, option, Kijk, hit_count)
+    subroutine update_Kijk_from_hist(io, option, fwrk)
 !-----------------------------------------------------------------------
       implicit none
 
       integer,          intent(in)    :: io
       type(s_option),   intent(in)    :: option
-      real(8),          intent(inout) :: Kijk(0:option%nt_range,        &
-                                             option%nstate,             &
-                                             option%nstate,             &
-                                             option%nstate)
-      real(8),          intent(inout) :: hit_count(option%nstate,       &
-                                                   option%nstate)
+      type(s_fwrk),     intent(inout) :: fwrk
 
       ! Local
       !
@@ -234,7 +238,7 @@
       !
       character(len=MaxChar) :: line, typ
       integer                :: istep
-      integer                :: is, js, ks
+      integer                :: is, js, ks, ik
       real(8)                :: val
 
       ! Setup
@@ -245,10 +249,25 @@
         read(line,*) typ
         if (trim(typ) == 'H') then
           read(line,*) typ, js, ks, val
-          hit_count(js, ks) = hit_count(js, ks) + val
+          fwrk%h(js, ks) = fwrk%h(js, ks) + val
         else if (trim(typ) == 'K') then
           read(line,*) typ, is, js, ks, istep, val
-          Kijk(istep, is, js, ks) = Kijk(istep, is, js, ks) + val  
+          ik = fwrk%kmesh(is, js, ks)
+          if (ik == 0) then
+            fwrk%nk              = fwrk%nk + 1
+            ik                   = fwrk%nk
+            fwrk%kmesh(is, js, ks) = ik
+
+            if (ik >= fwrk%nkmax) then
+              write(iw,'("Update_Kijk_wo_Normalize> Error.")')
+              write(iw,'("# of elements exceeded array size of K &
+                         &specified by nkmax = ", i0)') fwrk%nkmax
+              write(iw,'("Please specify larger nkmax value in \&option_param section")')
+              stop
+            end if
+
+          end if
+          fwrk%K(istep, ik) = fwrk%K(istep, ik) + val 
         end if 
       end do
  100  return 
@@ -257,40 +276,52 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine convert_Kijk_arrays(option, boundary, Ktmp, htmp, f)
+    subroutine convert_Kijk_arrays(option, boundary, fwrk, f)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),   intent(in)    :: option
       type(s_boundary), intent(in)    :: boundary
-      real(8),          intent(in)    :: Ktmp(0:option%nt_range, &
-                                              option%nstate,     &
-                                              option%nstate,     &
-                                              option%nstate)
-      real(8),          intent(in)    :: htmp(option%nstate,     &
-                                              option%nstate)
+      type(s_fwrk),     intent(inout) :: fwrk
       type(s_func),     intent(inout) :: f
 
       ! Local
-      integer :: nboundary
+      integer :: nstate, nboundary, nt_range
 
       ! Dummy
-      integer :: ib, jb, is1, is2, js1, js2
+      integer :: ib, jb, is1, is2, js1, js2, ik
       integer :: inflx
 
 
+      ! Setup
+      !
+      nstate    = option%nstate
       nboundary = boundary%nboundary
+      nt_range  = option%nt_range
+
+      ! Allocate
+      !
+      if (.not. allocated(f%K)) then
+        allocate(f%K(0:nt_range, nstate, -nboundary:nboundary))
+        allocate(f%hit_count(-nboundary:nboundary))
+      end if
+      f%K         = 0.0d0
+      f%hit_count = 0.0d0
+
+      ! Convert K-arrays
+      !
       do ib = -nboundary, nboundary
         if (ib == 0) cycle
         is1             = boundary%b2p(1, ib)
         is2             = boundary%b2p(2, ib)
-        f%hit_count(ib) = htmp(is2, is1)
+        f%hit_count(ib) = fwrk%h(is2, is1)
 
         do inflx = 1, boundary%n_influx_boundary(is1)
-          jb  = boundary%influx_boundary(inflx, is1)
-          js1 = boundary%b2p(1, jb)
-          js2 = boundary%b2p(2, jb)
-          f%K(:, is2, jb) = Ktmp(:, is2, is1, js1) 
+          jb   = boundary%influx_boundary(inflx, is1)
+          js1  = boundary%b2p(1, jb)
+          js2  = boundary%b2p(2, jb)
+          ik   = fwrk%kmesh(is2, is1, js1)
+          f%K(:, is2, jb) = fwrk%K(:, ik)
         end do 
       end do
 
@@ -298,19 +329,21 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine normalize_Kijk(option, boundary, f)
+    subroutine normalize_Kijk(option, boundary, f, verbose)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary
-      type(s_func),     intent(inout) :: f 
+      type(s_option),    intent(in)    :: option
+      type(s_boundary),  intent(in)    :: boundary
+      type(s_func),      intent(inout) :: f
+      logical, optional, intent(in)    :: verbose 
 
 
       ! Local
       !
       integer :: nt_range, nstate, nboundary
       real(8) :: dt
+      logical :: vb
 
       ! Dummy
       !
@@ -325,6 +358,9 @@
       nstate    = option%nstate
       nboundary = boundary%nboundary 
       dt        = option%dt_out
+
+      vb = .true.
+      if (present(verbose)) vb = verbose
 
       ! Normalize
       !
@@ -347,19 +383,21 @@
 
       ! Report Hit counts
       !
-      write(iw,'("Normalize_Kijk> Summary of Hit counts")')
-      write(iw,'("I <--- J")')
-      do ib = -nboundary, nboundary
-        if (ib == 0) then
-          cycle
-        end if
-
-        is1 = boundary%b2p(1, ib)
-        is2 = boundary%b2p(2, ib)
-
-        write(iw,'(i5,i5," : ", f20.10)') is2, is1, f%hit_count(ib) 
-      end do
-      write(iw,*)
+      if (vb) then
+        write(iw,'("Normalize_Kijk> Summary of Hit counts")')
+        write(iw,'("I <--- J")')
+        do ib = -nboundary, nboundary
+          if (ib == 0) then
+            cycle
+          end if
+        
+          is1 = boundary%b2p(1, ib)
+          is2 = boundary%b2p(2, ib)
+        
+          write(iw,'(i5,i5," : ", f20.10)') is2, is1, f%hit_count(ib) 
+        end do
+        write(iw,*)
+      end if
       
 
     end subroutine normalize_Kijk
@@ -499,19 +537,13 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine output_Kijk_hist(option, output, Kijk, hit_count)
+    subroutine output_Kijk_hist(option, output, fwrk)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option), intent(in) :: option
       type(s_output), intent(in) :: output
-      real(8),        intent(in) :: Kijk(0:option%nt_range,        &
-                                        option%nstate,             &
-                                        option%nstate,             &
-                                        option%nstate)
-      real(8),        intent(in) :: hit_count(option%nstate,       &
-                                              option%nstate)
-     
+      type(s_fwrk),   intent(in) :: fwrk
 
       ! I/O
       !
@@ -526,7 +558,7 @@
 
       ! Dummy
       !
-      integer :: is, js, ks, istep
+      integer :: is, js, ks, istep, ik
 
 
       ! Setup
@@ -534,7 +566,7 @@
       nstate   = option%nstate
       nt_range = option%nt_range
 
-      hsum = sum(hit_count(:, :))
+      hsum = sum(fwrk%h(:, :))
       if (hsum < 0.999d0) then
         return
       end if
@@ -546,7 +578,7 @@
 
       do ks = 1, nstate
       do js = 1, nstate
-        val = hit_count(js, ks)
+        val = fwrk%h(js, ks)
         if (val >= 0.999d0) then
           write(io, '("H", 2x, i5, 2x, i5, 2x, f20.10)') js, ks, val 
         end if
@@ -556,12 +588,14 @@
       do ks = 1, nstate
       do js = 1, nstate
       do is = 1, nstate
-      do istep = 0, nt_range
-        val = Kijk(istep, is, js, ks)
-        if (val >= 0.999d0) then
-          write(io, '("K", 2x, i5, 2x, i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, ks, istep, val
-        end if
-      end do 
+        ik = fwrk%kmesh(is, js, ks)
+        if (ik == 0) cycle
+        do istep = 0, nt_range
+          val = fwrk%K(istep, ik) 
+          if (val >= 0.999d0) then
+            write(io, '("K", 2x, i5, 2x, i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, ks, istep, val
+          end if
+        end do 
       end do
       end do 
       end do

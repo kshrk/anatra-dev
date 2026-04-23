@@ -30,6 +30,7 @@ module mod_ctrl
     logical :: calc_Pint            = .false.
     logical :: calc_Steady          = .false.
     logical :: check_Kijk           = .false.
+    logical :: check_senserr        = .false.
 
     integer :: input_type    = InputTypeTimeSeries
 
@@ -40,10 +41,15 @@ module mod_ctrl
     integer :: product_state_ids   (MaxStates)    = NotSpecified
     integer :: dissociate_state_ids(MaxStates)    = NotSpecified
     integer :: initial_state_ids   (MaxStates)    = NotSpecified
+    integer :: nkmax                              = 1000
 
     ! File names 
     !
     character(len=MaxChar) :: f_unperturbed_id = ''
+
+    ! for free-energy calculation 
+    !
+    real(8)              :: temperature  = 298.0d0
 
     ! for time scale definition
     !
@@ -70,6 +76,7 @@ module mod_ctrl
 
     logical, allocatable :: is_initial  (:)
     logical, allocatable :: is_product  (:)
+    logical, allocatable :: is_reflect  (:)
     logical, allocatable :: is_dissoc   (:) 
     real(8), allocatable :: state_def   (:, :, :)
     real(8), allocatable :: state_weight(:)
@@ -155,6 +162,7 @@ module mod_ctrl
       logical :: calc_Pint            = .false.
       logical :: calc_Steady          = .false.
       logical :: check_Kijk           = .false.
+      logical :: check_senserr        = .false.
 
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
       character(len=MaxChar) :: f_unperturbed_id = '' 
@@ -166,6 +174,8 @@ module mod_ctrl
       integer :: product_state_ids(MaxStates)    = NotSpecified
       integer :: dissociate_state_ids(MaxStates) = NotSpecified
       integer :: initial_state_ids(MaxStates)    = NotSpecified
+      integer :: nkmax                           = 1000
+      real(8) :: temperature                     = 300.0d0
       real(8) :: dt
       real(8) :: t_sparse
       real(8) :: t_range
@@ -190,6 +200,7 @@ module mod_ctrl
         output_histogram,     &
         extrapolate,          &
         check_Kijk,           &
+        check_senserr,        &
         calc_Pint,            &
         calc_Steady,          &
         input_type,           &
@@ -201,6 +212,8 @@ module mod_ctrl
         product_state_ids,    &
         dissociate_state_ids, &
         initial_state_ids,    &
+        nkmax,                &
+        temperature,          &
         dt,                   &
         t_sparse,             &
         t_range,              &
@@ -220,14 +233,16 @@ module mod_ctrl
       write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
+      write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
       write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
       write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
       write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
 
-      write(iw,'("extrapolate          = ", a)')     get_tof(extrapolate)
-      write(iw,'("nmol                 = ", i0)')    nmol
-      write(iw,'("ndim                 = ", i0)')    ndim
-      write(iw,'("nstate               = ", i0)')    nstate
+      write(iw,'("extrapolate          = ", a)')      get_tof(extrapolate)
+      write(iw,'("nmol                 = ", i0)')     nmol
+      write(iw,'("ndim                 = ", i0)')     ndim
+      write(iw,'("nstate               = ", i0)')     nstate
+      write(iw,'("temperature          = ", f20.10)') temperature 
 
       write(iw,'("dt                   = ", f20.10)') dt
       write(iw,'("t_sparse             = ", f20.10)') t_sparse
@@ -246,22 +261,27 @@ module mod_ctrl
 
       ! Reflection
       !
+      allocate(option%is_reflect(nstate))
+      option%is_reflect = .false.
+
       if (use_reflection_state) then
         nreflect = 0
         write(iw,*)
         do i = 1, MaxStates
           if (reflection_state_ids(i) /= NotSpecified)  then
-            write(iw,'("reflection_state_ids  ", i0, " : ", i0)') reflection_state_ids(i)
-            nreflect = nreflect + 1
+            write(iw,'("reflection_state_ids  ", i0, " : ", i0)') i, reflection_state_ids(i)
+            option%is_reflect(reflection_state_ids(i)) = .true.
+            nreflect                                   = nreflect + 1
           else
             exit
           end if
         end do
+
       end if
 
       ! Product
       !
-      allocate(option%is_product(option%nstate))
+      allocate(option%is_product(nstate))
       option%is_product = .false.
 
       if (use_product_state) then
@@ -280,7 +300,7 @@ module mod_ctrl
 
       ! Dissociate
       !
-      allocate(option%is_dissoc(option%nstate))
+      allocate(option%is_dissoc(nstate))
       option%is_dissoc = .false.
 
       if (use_dissociate_state) then
@@ -332,6 +352,7 @@ module mod_ctrl
       option%output_histogram     = output_histogram
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
+      option%check_senserr        = check_senserr
       option%calc_Pint            = calc_Pint
       option%calc_Steady          = calc_Steady
 
@@ -353,6 +374,8 @@ module mod_ctrl
       option%ninitial             = ninitial
       option%initial_state_ids    = initial_state_ids
 
+      option%nkmax                = nkmax
+      option%temperature          = temperature
       option%dt                   = dt
       option%t_sparse             = t_sparse
       option%t_range              = t_range
@@ -435,6 +458,18 @@ module mod_ctrl
                    &if use_product_state = .true.")')
         stop
       end if
+
+      if (check_senserr .and. output_histogram) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("output_histogram should be turned off when check_senserr = .true.")')
+        stop
+      end if
+
+      if (check_senserr .and. .not. use_perturbed_traj) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("use_perturbed_traj should be turned on when check_senserr = .true.")')
+        stop
+      end if 
 
       ! Memory allocation
       !

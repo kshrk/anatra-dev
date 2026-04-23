@@ -1,12 +1,15 @@
 !-----------------------------------------------------------------------
-    subroutine reacdyn_pint(output, option, boundary, f)
+    subroutine reacdyn_pint(output, option, boundary, f, ip, &
+                            write_steady)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_output),   intent(in)    :: output
-      type(s_option),   intent(in)    :: option
-      type(s_boundary), intent(in)    :: boundary
-      type(s_func),     intent(inout) :: f
+      type(s_output),    intent(in)    :: output
+      type(s_option),    intent(in)    :: option
+      type(s_boundary),  intent(in)    :: boundary
+      type(s_func),      intent(inout) :: f
+      type(s_infprop),   intent(inout) :: ip
+      logical, optional, intent(in)    :: write_steady
 
       ! I/O
       !
@@ -15,14 +18,15 @@
       ! Local
       !
       integer                :: nstate, nt_range, nboundary, nbt
-      real(8)                :: dt
+      real(8)                :: dt, kT
       character(len=MaxChar) :: fname
+      logical                :: ws
 
       integer                :: thread_id
 
       ! Dummy
       !
-      integer :: is, js, ks, is1, is2, js1, js2
+      integer :: is, js, ks, is1, is2, js1, js2, iref
       integer :: iu, ju, ku
       integer :: ib, jb, inflx, jnflx, id
       integer :: lda, ldb, ldvl, ldvr, info, lwork
@@ -48,19 +52,22 @@
       dt        = option%dt_out
       nboundary = boundary%nboundary
       nbt       = nboundary * 2
+      kT        = option%temperature * Boltz
 
-      allocate(Mu(nbt))
-      allocate(Kuu(nbt, nbt))
-      allocate(Ru(nbt))
-      allocate(Xuu(nbt, nbt))
-      allocate(Pint(nstate))
-      allocate(Pss(nstate))
-      allocate(Qint(nbt), Qinf(nbt))
-      allocate(ipiv(nbt)) 
-      allocate(map(2, nbt))
-      allocate(mapb(nbt))
-      allocate(mapb_inv(-nboundary:nboundary))
-      allocate(wr(nbt), wi(nbt), vl(nbt, nbt), vr(nbt, nbt))
+      if (.not. allocated(Mu)) then
+        allocate(Mu(nbt))
+        allocate(Kuu(nbt, nbt))
+        allocate(Ru(nbt))
+        allocate(Xuu(nbt, nbt))
+        allocate(Pint(nstate))
+        allocate(Pss(nstate))
+        allocate(Qint(nbt), Qinf(nbt))
+        allocate(ipiv(nbt)) 
+        allocate(map(2, nbt))
+        allocate(mapb(nbt))
+        allocate(mapb_inv(-nboundary:nboundary))
+        allocate(wr(nbt), wi(nbt), vl(nbt, nbt), vr(nbt, nbt))
+      end if
       Mu       = 0.0d0
       Kuu      = 0.0d0
       Ru       = 0.0d0
@@ -195,6 +202,7 @@
         allocate(work(lwork))
 
         call dgeev('N', 'V', nbt, Xuu, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, info)
+        deallocate(work)
 
         if (info /= 0) then
           write(iw,'("Reacdyn_Pint> Error.")')
@@ -237,8 +245,6 @@
 !        end do
 !        ! >> DEBUG
 
-        write(fname,'(a,".steady")') trim(output%fhead)
-        call open_file(fname, io)
         psum = 0.0
         do is = 1, nstate
           if (option%is_initial(is)) then
@@ -246,11 +252,38 @@
           end if
         end do
 
+        Pss(:) = Pss(:) / psum
         do is = 1, nstate
-          write(io,'(i5, 2x, e15.7)') is, Pss(is) / psum
+          ip%prob(is) = Pss(is)
+          ip%fe(is)   = -kT * log(ip%prob(is))
         end do
-        
-        close(io)
+
+        ip%fe_pair = 0.0d0
+        do is = 1, nstate - 1
+          if (option%is_reflect(is) .or. option%is_product(is)) cycle
+          do js = is + 1, nstate
+            if (option%is_reflect(js) .or. option%is_product(js)) cycle
+            ip%fe_pair(js, is) = ip%fe(js) - ip%fe(is)
+          end do
+        end do
+
+        ! Write steady-state properties
+        !
+        ws = .true.
+        if (present(write_steady)) then
+          ws = write_steady
+        end if
+
+        if (ws) then
+          write(fname,'(a,".steady")') trim(output%fhead)
+          call open_file(fname, io)
+          do is = 1, nstate
+            if (option%is_reflect(is) .or. option%is_product(is)) cycle
+            write(io,'(i5, 2x, 2(e15.7,2x))') is, ip%prob(is), ip%fe(is)
+          end do
+          close(io)
+        end if
+
       end if
 
       ! Deallocate memory

@@ -196,7 +196,12 @@ module mod_analyze
           is_inside = .true.
           do idim = 1, ndim
             val        = cv(ifile)%data(xyzcol(idim), istep)
-            gind(idim) = (val - origin(idim)) / del(idim) + 1
+            if (option%discretize_scheme == DiscretizeSchemeCenter) then
+              gind(idim) = nint((val - origin(idim)) / del(idim)) + 1
+            else if (option%discretize_scheme == DiscretizeSchemeForward) then
+              gind(idim) = (val - origin(idim)) / del(idim) + 1
+            end if
+
             if (gind(idim) < 1 .or. gind(idim) > ng3(idim)) then
               is_inside = .false.
             end if

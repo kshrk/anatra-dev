@@ -37,7 +37,9 @@
       dt        = option%dt_out
       nboundary = boundary%nboundary
 
-      allocate(boundary%conv_direc(-nboundary:nboundary))
+      if (.not. allocated(boundary%conv_direc)) then
+        allocate(boundary%conv_direc(-nboundary:nboundary))
+      end if
       boundary%conv_direc = .false.
 
       do iref = 1, option%nreflect

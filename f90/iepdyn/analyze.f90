@@ -39,7 +39,23 @@ module mod_analyze
     real(8), allocatable :: hit_count(:) 
   end type s_func
 
+  type :: s_fwrk
+    integer :: nkmax = 50000
+    integer :: nk    = 0
+    integer, allocatable :: kmesh(:, :, :)
+    real(8), allocatable :: K(:, :)
+    real(8), allocatable :: h(:, :)
+  end type s_fwrk
+
+  type :: s_infprop
+    real(8), allocatable :: prob(:)
+    real(8), allocatable :: fe(:)
+    real(8), allocatable :: fe_pair(:, :)
+  end type s_infprop
+
   type :: s_inpcond
+    integer, allocatable :: unperturbed_ids(:)
+    integer, allocatable :: use_for_Rij(:)
     integer, allocatable :: nfile_each_state(:)
     integer, allocatable :: nfile_to_be_read(:)
   end type s_inpcond
@@ -68,48 +84,40 @@ module mod_analyze
       ! Local
       !
       character(len=MaxChar) :: line
-      integer                :: ndim, nstep, nfile, nstate
+      integer                :: ndim, nstep, nfile, nstate, nfepair
       integer                :: nt_range
       integer                :: nboundary
       logical                :: is_end
 
-      type(s_func)     :: f
+      type(s_func)     :: f, fs
       type(s_inpcond)  :: ic
       type(s_boundary) :: boundary
       type(s_cv)       :: cv
       type(s_state)    :: state
+      type(s_fwrk)     :: fwrk
+      type(s_infprop)  :: ip
 
       ! Dummy
       !
-      integer :: ifile, istep, iseg, is, js, is1, is2, ib, id, idir
+      integer :: ifile, istep, iseg, is, js, ks, is1, is2, ib, id, idir, iref
 
       ! Arrays
       !
-      integer, allocatable :: unperturbed_ids(:), use_for_Rij(:)
-      real(8), allocatable :: Ktmp(:, :, :, :), htmp(:, :)
+      type(s_infprop), allocatable :: ipse(:)
+      real(8),         allocatable :: festdev(:)
 
 
       ! Setup
       !
-      ndim     = option%ndim * option%nmol 
-      nfile    = input%ncv
-      nstate   = option%nstate
-      nt_range = option%nt_range
+      ndim       = option%ndim * option%nmol 
+      nfile      = input%ncv
+      nstate     = option%nstate
+      nt_range   = option%nt_range
+      
+      fwrk%nkmax = option%nkmax
 
       ! Allocate 
       !
-      allocate(f%R   (0:nt_range, nstate, nstate))
-      allocate(f%Rint(0:nt_range, nstate, nstate))
-      allocate(f%P0  (0:nt_range, nstate))
-
-      allocate(Ktmp(0:nt_range, nstate, nstate, nstate))
-      allocate(htmp(nstate, nstate))
-
-      f%R    = 0.0d0
-      f%Rint = 0.0d0
-      f%P0   = 0.0d0
-      Ktmp   = 0.0d0
-      htmp   = 0.0d0
       
       ! Read Unperturbed_ID file
       !
@@ -120,10 +128,10 @@ module mod_analyze
 
         ! Get unperturbed state id for each file
         !
-        allocate(unperturbed_ids(nfile), use_for_Rij(nfile))
-        call read_f_unperturbed_id(option, nfile, unperturbed_ids, use_for_Rij)
+        allocate(ic%unperturbed_ids(nfile), ic%use_for_Rij(nfile))
+        call read_f_unperturbed_id(option, nfile, ic%unperturbed_ids, ic%use_for_Rij)
         do ifile = 1, nfile
-          write(iw,'(3i10)') ifile, unperturbed_ids(ifile), use_for_Rij(ifile)
+          write(iw,'(3i10)') ifile, ic%unperturbed_ids(ifile), ic%use_for_Rij(ifile)
         end do
        
         ! Get # of files for each unperturbed state
@@ -133,7 +141,7 @@ module mod_analyze
 
         ic%nfile_each_state = 0
         do ifile = 1, nfile
-          is                      = unperturbed_ids(ifile)
+          is                      = ic%unperturbed_ids(ifile)
           ic%nfile_each_state(is) = ic%nfile_each_state(is) + 1
         end do
 
@@ -145,134 +153,10 @@ module mod_analyze
 
       end if
 
-      ! TODO: Following should be capsuled as a subroutine in future update 
+      ! Calculate Kernels
       !
-      if (option%input_type == InputTypeTIMESERIES) then
-
-        do ifile = 1, nfile
-       
-          write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
-       
-          iseg   = 0
-          is_end = .false.
-          call open_file(input%fcv(ifile), io, stat = 'old')
-          do while (.not. is_end)
-       
-            ! Initialized
-            ! 
-            if (allocated(cv%x)) then
-              call deallocate_cv(cv)
-            end if
-       
-            if (allocated(state%data)) then
-              state%nmol  = 0
-              state%nstep = 0
-              deallocate(state%data)
-            end if
-       
-            ! Read
-            !
-            call read_cv_split(io, ndim, '#SPLIT', cv, is_end)
-       
-            if (cv%nstep /= 0) then
-              iseg = iseg + 1
-              call get_state(option, cv, state)
-       
-              state%unperturbed_id = -1
-              state%use_for_Rij    = -1
-              if (option%use_perturbed_traj) then
-                state%unperturbed_id = unperturbed_ids(ifile)
-                state%use_for_Rij    = use_for_Rij(ifile)
-              end if
-       
-              ! Update Connectivity
-              !
-              call get_state_connectivity(output, option, state, boundary)
-       
-              ! Update R- and K-functions
-              !
-              call update_Rij_wo_normalize(option, state, f)
-              call update_Kijk_wo_normalize(option, state, Ktmp, htmp)
-            end if
-       
-          end do
-       
-          close(io)
-       
-        end do
-
-        if (option%output_histogram) then
-          call output_Rij_hist(option, output, f)
-          call output_Kijk_hist(option, output, Ktmp, htmp)
-        end if
-
-      else if (option%input_type == InputTypeHISTOGRAM) then
-        do ifile = 1, nfile
-          write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
-          iseg   = 0
-          is_end = .false.
-          call open_file(input%fcv(ifile), io, stat = 'old')
-          read(io,'(a)') line
-          if (trim(line) == 'KIJK') then
-            call update_Kijk_from_hist(io, option, ktmp, htmp) 
-          else if (trim(line) == 'RIJ') then
-            call update_Rij_from_hist(io, option, f) 
-          end if
-          close(io)
-        end do
-        call get_state_connectivity_from_h(option, htmp, boundary)
-      end if
-
-      ! Show connectivity
-      !
-      write(iw,*)
-      write(iw,'("Analyze> Get Connectivity")')
-      call show_state_connectivity(option, boundary)
-
-      ! Define boundary
-      !
-      write(iw,*)
-      write(iw,'("Analyze> Define Boundary")')
-      call define_boundary(option, boundary)
-      nboundary = boundary%nboundary
-      write(iw,'(">> Done")')
-
-      ! Convert arrays
-      !
-      allocate(f%K(0:nt_range, nstate, -nboundary:nboundary))
-      allocate(f%M(0:nt_range, -nboundary:nboundary))
-      allocate(f%hit_count(-nboundary:nboundary))
-
-      f%K         = 0.0d0
-      f%M         = 0.0d0
-      f%hit_count = 0.0d0
-
-      call convert_Kijk_arrays(option, boundary, Ktmp, htmp, f)
-
-      ! Normalize R- and K-functions
-      ! 
-      call normalize_Rij(option, f)
-      call normalize_Kijk(option, boundary, f)
-
-      ! Check Kijk
-      !
-      call check_Kijk(option, boundary, f)
-
-      ! Compute R-integration and P0
-      !
-      write(iw,*)
-      write(iw,'("Analyze> Calculate P0 from Rij")')
-
-      call running_integral_Rij(option, f)
-      call calc_P0_from_Rij    (option, boundary, f)
-      write(iw,'(">> Done")')
-
-      ! Compute Mij
-      !
-      write(iw,*)
-      write(iw,'("Analyze> Calculate Mjk from Kijk")')
-      call calc_Mjk_from_Kijk(option, boundary, f)
-      write(iw,'(">> Done")')
+      call calc_kernels(input, output, option, ic, boundary, f, fwrk, &
+                        set_boundary = .true., verbose = .true.)
 
       ! Output
       !
@@ -293,7 +177,79 @@ module mod_analyze
       write(iw,'(">> Done")')
 
       if (option%calc_Pint .or. option%calc_Steady) then
-        call reacdyn_pint(output, option, boundary, f)
+        if (option%calc_Steady) then
+          allocate(ip%prob(nstate), ip%fe(nstate), ip%fe_pair(nstate, nstate))
+        end if
+        call reacdyn_pint(output, option, boundary, f, ip, write_steady = .true.)
+      end if
+
+      if (option%check_senserr .and. (option%calc_Pint .or. option%calc_Steady)) then
+        write(iw,*)
+        write(iw,'("Analyze> Start Sensitivity analysis of steady-state properties")')
+
+        allocate(ipse(nstate))
+
+        do is = 1, nstate
+
+          allocate(ipse(is)%prob(nstate), ipse(is)%fe(nstate), ipse(is)%fe_pair(nstate, nstate))
+
+          ! Initialize
+          !
+          do js = 1, nstate
+            ic%nfile_to_be_read(js) = ic%nfile_each_state(js)
+          end do
+
+          ! Set # of files to be read for specific state
+          !
+          if (option%is_reflect(is) .or. option%is_product(is)) cycle
+          write(iw,'("Checking state ", i0)') is
+          
+          ic%nfile_to_be_read(is) = ic%nfile_to_be_read(is) * 0.5d0 
+
+          ! Calculate Kernels
+          !
+          call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
+                            set_boundary = .false., verbose = .false.)
+
+          ! Setup Boundary conditions
+          !
+          call set_reflection(output, option, boundary, fs) 
+          call set_product   (output, option, boundary, fs)
+
+          ! Calculate steady-state properties
+          !
+          call reacdyn_pint(output, option, boundary, fs, ipse(is), &
+                            write_steady = .false.)
+
+          if (option%calc_Steady) then
+
+            if (.not. allocated(festdev)) then
+              allocate(festdev(nstate))
+            end if
+
+            festdev(is) = 0.0d0
+            nfepair     = 0
+            do js = 1, nstate - 1
+              if (option%is_reflect(js) .or. option%is_product(js)) cycle 
+              do ks = js + 1, nstate
+                if (option%is_reflect(ks) .or. option%is_product(ks)) cycle
+                nfepair = nfepair + 1
+                festdev(is) = festdev(is) + (ipse(is)%fe_pair(ks, js) - ip%fe_pair(ks, js))**2
+              end do
+            end do
+            festdev(is) = sqrt(festdev(is)/dble(nfepair))
+          end if
+
+        end do
+
+        write(fname,'(a,".senserr")') trim(output%fhead)
+        call open_file(fname, io)
+        do is = 1, nstate
+          if (option%is_reflect(is) .or. option%is_product(is)) cycle
+          write(io,'(i5, f15.7)') is, festdev(is)
+        end do
+        close(io)
+        write(iw,'(">> Done")') 
       end if
 
       if (option%extrapolate) then
@@ -418,6 +374,260 @@ module mod_analyze
       
 !
     end subroutine read_f_unperturbed_id 
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine calc_kernels(input, output, option, ic, b, f, fwrk, &
+                            set_boundary, verbose)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_input),     intent(in)    :: input
+      type(s_output),    intent(in)    :: output
+      type(s_option),    intent(in)    :: option
+      type(s_inpcond),   intent(in)    :: ic
+      type(s_boundary),  intent(inout) :: b
+      type(s_func),      intent(inout) :: f
+      type(s_fwrk),      intent(inout) :: fwrk
+      logical, optional, intent(in)    :: set_boundary
+      logical, optional, intent(in)    :: verbose
+
+      ! I/O
+      !
+      integer                :: io
+      character(len=MaxChar) :: fname 
+
+      ! Local
+      !
+      character(len=MaxChar) :: line
+      integer                :: ndim, nstep, nfile, nstate
+      integer                :: nt_range, unp_id
+      integer                :: nboundary
+      logical                :: is_end
+      logical                :: sb, vb
+
+      type(s_cv)    :: cv
+      type(s_state) :: state
+
+      ! Dummy
+      !
+      integer :: ifile, istep, iseg, is, js, is1, is2, ib, id, idir
+
+      ! Arrays
+      !
+      integer, allocatable :: ncount_traj(:)
+
+      ! Setup
+      ! 
+      ndim     = option%ndim * option%nmol 
+      nfile    = input%ncv
+      nstate   = option%nstate
+      nt_range = option%nt_range
+
+      vb = .false.
+      if (present(verbose)) vb = verbose
+
+      ! Allocate some arrays in f structure
+      !
+      if (.not. allocated(f%R)) then
+        allocate(f%R   (0:nt_range, nstate, nstate))
+        allocate(f%Rint(0:nt_range, nstate, nstate))
+        allocate(f%P0  (0:nt_range, nstate))
+      end if
+
+      f%R    = 0.0d0
+      f%Rint = 0.0d0
+      f%P0   = 0.0d0
+
+      ! Allocate work space
+      !
+      if (.not. allocated(fwrk%h)) then
+        allocate(fwrk%h(nstate, nstate))
+        allocate(fwrk%K(0:nt_range, fwrk%nkmax))
+        allocate(fwrk%kmesh(nstate, nstate, nstate))
+        fwrk%nk    = 0
+        fwrk%K     = 0.0d0
+        fwrk%kmesh = 0
+      end if
+      fwrk%K = 0.0d0
+      fwrk%h = 0.0d0
+
+      if (.not. allocated(ncount_traj)) then
+        allocate(ncount_traj(nstate))
+      end if
+      ncount_traj = 0
+
+      if (option%input_type == InputTypeTIMESERIES) then
+
+        do ifile = 1, nfile
+
+          ! For sensitivity analysis
+          !    
+          if (option%use_perturbed_traj .and. option%check_senserr) then
+            id = ic%unperturbed_ids(ifile)
+            if (id > 0) then
+              ncount_traj(id) = ncount_traj(id) + 1
+              if (ncount_traj(id) > ic%nfile_to_be_read(id)) then
+                cycle
+              end if
+            end if
+          end if
+
+          if (vb) then
+            write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
+          end if
+       
+          iseg   = 0
+          is_end = .false.
+          call open_file(input%fcv(ifile), io, stat = 'old')
+          do while (.not. is_end)
+       
+            ! Initialized
+            ! 
+            if (allocated(cv%x)) then
+              call deallocate_cv(cv)
+            end if
+       
+            if (allocated(state%data)) then
+              state%nmol  = 0
+              state%nstep = 0
+              deallocate(state%data)
+            end if
+       
+            ! Read
+            !
+            call read_cv_split(io, ndim, '#SPLIT', cv, is_end)
+       
+            if (cv%nstep /= 0) then
+              iseg = iseg + 1
+              call get_state(option, cv, state)
+       
+              state%unperturbed_id = -1
+              state%use_for_Rij    = -1
+              if (option%use_perturbed_traj) then
+                state%unperturbed_id = ic%unperturbed_ids(ifile)
+                state%use_for_Rij    = ic%use_for_Rij(ifile)
+              end if
+       
+              ! Update Connectivity
+              !
+              call get_state_connectivity(output, option, state, b)
+       
+              ! Update R- and K-functions
+              !
+              call update_Rij_wo_normalize(option, state, f)
+              call update_Kijk_wo_normalize(option, state, fwrk)
+
+            end if
+       
+          end do
+       
+          close(io)
+       
+        end do
+
+        if (option%output_histogram) then
+          call output_Rij_hist (option, output, f)
+          call output_Kijk_hist(option, output, fwrk)
+        end if
+
+      else if (option%input_type == InputTypeHISTOGRAM) then
+
+        do ifile = 1, nfile
+
+          ! For sensitivity analysis
+          !    
+          if (option%use_perturbed_traj .and. option%check_senserr) then
+            id = ic%unperturbed_ids(ifile)
+            if (id > 0) then
+              ncount_traj(id) = ncount_traj(id) + 1
+
+              if (ncount_traj(id) > ic%nfile_to_be_read(id)) then
+                cycle
+              end if
+            end if
+          end if
+
+          if (vb) then
+            write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
+          end if
+
+          iseg   = 0
+          is_end = .false.
+          call open_file(input%fcv(ifile), io, stat = 'old')
+          read(io,'(a)') line
+          if (trim(line) == 'KIJK') then
+            call update_Kijk_from_hist(io, option, fwrk) 
+          else if (trim(line) == 'RIJ') then
+            call update_Rij_from_hist(io, option, f) 
+          end if
+          close(io)
+        end do
+        call get_state_connectivity_from_h(option, fwrk%h, b)
+      end if
+
+      sb = .true.
+      if (present(set_boundary)) then
+        sb = set_boundary
+      end if
+
+      if (sb) then
+
+        ! Show connectivity
+        !
+        if (vb) then
+          write(iw,*)
+          write(iw,'("Analyze> Get Connectivity")')
+          call show_state_connectivity(option, b)
+        end if
+        
+        ! Define boundary
+        !
+        if (vb) then
+          write(iw,*)
+          write(iw,'("Analyze> Define Boundary")')
+        end if
+        call define_boundary(option, b)
+        nboundary = b%nboundary
+        if (vb) write(iw,'(">> Done")')
+
+      end if
+
+      ! Convert arrays
+      !
+      call convert_Kijk_arrays(option, b, fwrk, f)
+
+      ! Normalize R- and K-functions
+      ! 
+      call normalize_Rij(option, f)
+      call normalize_Kijk(option, b, f, verbose = vb)
+
+      ! Check Kijk
+      !
+      if (vb) then
+        call check_Kijk(option, b, f)
+      end if
+
+      ! Compute R-integration and P0
+      !
+      if (vb) then
+        write(iw,*)
+        write(iw,'("Analyze> Calculate P0 from Rij")')
+      end if
+      call running_integral_Rij(option, f)
+      call calc_P0_from_Rij    (option, b, f)
+      if (vb) write(iw,'(">> Done")')
+
+      ! Compute Mij
+      !
+      if (vb) then
+        write(iw,*)
+        write(iw,'("Analyze> Calculate Mjk from Kijk")')
+      end if
+      call calc_Mjk_from_Kijk(option, b, f)
+      if (vb) write(iw,'(">> Done")')
+
+    end subroutine calc_kernels
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
