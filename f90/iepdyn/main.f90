@@ -13,9 +13,9 @@ program main
 
   call show_title
   call show_usage
-  call read_ctrl(input, einput, output, option, timegrid)
-  call analyze(input, einput, output, option, timegrid)
-  call termination("Transition Probability Analysis")
+  call read_ctrl  (input, einput, output, option, timegrid)
+  call analyze    (input, einput, output, option, timegrid)
+  call termination("IEPDYN Analysis")
 
 end program main 
 !=======================================================================
@@ -27,7 +27,8 @@ subroutine show_title
 
   write(6,'("==================================================")')
   write(6,*)
-  write(6,'("        Transition Probability Analysis")')
+  write(6,'("               I  E  P  D  Y  N")')
+  write(6,'("Integral-Equation formalism of Population DYNamins")')
   write(6,*)
   write(6,'("==================================================")') 
 
@@ -55,11 +56,18 @@ subroutine show_usage
     write(iw,'(" fhead         = ""filehead""  ! header of output file")')
     write(iw,'("/")')
     write(iw,'("&option_param")')
+    write(iw,'(" input_type             =  ""TIMESERIES"" ! Input fcv format (Default: TIMESERIES)")')
+    write(iw,'(" ! TIMESERIES or HISTOGRAM")')
+    write(iw,'(" ! TIMESERIES format is ANATRA standard")')
+    write(iw,'(" ! HISTOGRAM-formatted is restart file created with this program when output_histgram = .true.")')
+    write(iw,*)
+    write(iw,'(" output_histogram       =  .false.       ! create restart files (khist for Kijk and rhist for Rij)")')
     write(iw,'(" use_dissociate_state   =  .false.       ! define dissociate state or not")')
     write(iw,'(" use_reflection_state   =  .false.       ! define reflection state or not")')
     write(iw,'(" use_product_state      =  .false.       ! define product (absorbing) state or not")')
     write(iw,'(" calc_steady            =  .false.       ! calculate steady-state (equilibrium) populations or not")')
     write(iw,'(" calc_Pint              =  .false.       ! calculate time integral of Pj analytically or not")')
+    write(iw,'(" extrapolate            =  .false.       ! evaluate the time development of Pj(t) based on the integral equations")')
     write(iw,'(" nstate                 =  4             ! # of states")')
     write(iw,'(" ndim                   =  1             ! # of dimensions.")')
     write(iw,'(" nmol                   =  1             ! # of target molecules (typically 1)")')
