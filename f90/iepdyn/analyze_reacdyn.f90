@@ -43,6 +43,11 @@
       integer, allocatable :: tind_kfr_final(:, :), tind_mfr_final(:)
 
 
+      if (.not. option%extrapolate) return
+
+      write(iw,*)
+      write(iw,'("Analyze> Start propagation")')
+
       ! Setup
       !
       nstate    = option%nstate

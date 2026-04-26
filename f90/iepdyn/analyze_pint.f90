@@ -1,6 +1,6 @@
 !-----------------------------------------------------------------------
     subroutine reacdyn_pint(output, option, boundary, f, ip, &
-                            write_steady)
+                            write_steady, fname_out)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -10,6 +10,7 @@
       type(s_func),      intent(inout) :: f
       type(s_infprop),   intent(inout) :: ip
       logical, optional, intent(in)    :: write_steady
+      character(len=MaxChar), optional, intent(in) :: fname_out
 
       ! I/O
       !
@@ -45,6 +46,8 @@
       real(8), allocatable :: work(:)             ! for eigen 
 
 
+      if (.not. (option%calc_Pint .or. option%calc_Steady)) return 
+
       ! Setup
       !
       nstate    = option%nstate
@@ -53,6 +56,12 @@
       nboundary = boundary%nboundary
       nbt       = nboundary * 2
       kT        = option%temperature * Boltz
+
+      if (option%calc_Steady .and. .not. allocated(ip%prob)) then
+        allocate(ip%prob(nstate))
+        allocate(ip%fe(nstate))
+        allocate(ip%fe_pair(nstate, nstate))
+      end if
 
       if (.not. allocated(Mu)) then
         allocate(Mu(nbt))
@@ -276,6 +285,10 @@
 
         if (ws) then
           write(fname,'(a,".steady")') trim(output%fhead)
+          if (present(fname_out)) then
+            write(fname,'(a)') trim(fname_out)
+          end if
+
           call open_file(fname, io)
           do is = 1, nstate
             if (option%is_reflect(is) .or. option%is_product(is)) cycle

@@ -58,6 +58,8 @@ module mod_analyze
     integer, allocatable :: use_for_Rij(:)
     integer, allocatable :: nfile_each_state(:)
     integer, allocatable :: nfile_to_be_read(:)
+    integer, allocatable :: ista(:)
+    integer, allocatable :: iend(:)
   end type s_inpcond
 
   ! subroutines
@@ -78,18 +80,10 @@ module mod_analyze
 
       ! I/O
       !
-      integer                :: io
-      character(len=MaxChar) :: fname 
 
       ! Local
       !
-      character(len=MaxChar) :: line
-      integer                :: ndim, nstep, nfile, nstate, nfepair
-      integer                :: nt_range
-      integer                :: nboundary
-      logical                :: is_end
-
-      type(s_func)     :: f, fs
+      type(s_func)     :: f
       type(s_inpcond)  :: ic
       type(s_boundary) :: boundary
       type(s_cv)       :: cv
@@ -97,175 +91,444 @@ module mod_analyze
       type(s_fwrk)     :: fwrk
       type(s_infprop)  :: ip
 
-      ! Dummy
-      !
-      integer :: ifile, istep, iseg, is, js, ks, is1, is2, ib, id, idir, iref
-
-      ! Arrays
-      !
-      type(s_infprop), allocatable :: ipse(:)
-      real(8),         allocatable :: festdev(:)
-
 
       ! Setup
       !
-      ndim       = option%ndim * option%nmol 
-      nfile      = input%ncv
-      nstate     = option%nstate
-      nt_range   = option%nt_range
-      
       fwrk%nkmax = option%nkmax
 
-      ! Allocate 
+      ! Read Unperturbed_ID file 
+      ! (if use_perturbed_traj = .true.)
       !
-      
-      ! Read Unperturbed_ID file
-      !
-      if (option%use_perturbed_traj) then
-        write(iw,*)
-        write(iw,'("Analyze> Read f_unperturbed_id file")')
-        write(iw,'("Note: unperturbed state info. is used only if use_perturbed_traj = .true.")')
-
-        ! Get unperturbed state id for each file
-        !
-        allocate(ic%unperturbed_ids(nfile), ic%use_for_Rij(nfile))
-        call read_f_unperturbed_id(option, nfile, ic%unperturbed_ids, ic%use_for_Rij)
-        do ifile = 1, nfile
-          write(iw,'(3i10)') ifile, ic%unperturbed_ids(ifile), ic%use_for_Rij(ifile)
-        end do
-       
-        ! Get # of files for each unperturbed state
-        !
-        allocate(ic%nfile_each_state(nstate))
-        allocate(ic%nfile_to_be_read(nstate))
-
-        ic%nfile_each_state = 0
-        do ifile = 1, nfile
-          is                      = ic%unperturbed_ids(ifile)
-          ic%nfile_each_state(is) = ic%nfile_each_state(is) + 1
-        end do
-
-        ! Initial setting (will not be changed if check_senserr = .false.)
-        !
-        do is = 1, nstate
-          ic%nfile_to_be_read(is) = ic%nfile_each_state(is)  
-        end do
-
-      end if
+      call setup_perturb(input, option, ic)
 
       ! Calculate Kernels
       !
       call calc_kernels(input, output, option, ic, boundary, f, fwrk, &
                         set_boundary = .true., verbose = .true.)
 
-      ! Output
+      ! Write functions involved in the integral equations (IEs) as inputs
       !
+      call write_IEfunc(output, option, boundary, f)
+
+      ! Setup boundary conditions 
+      !
+      call setup_boundary_cond(output, option, boundary, f)
+
+      ! Evaluate steady-state properties 
+      ! (if check_Pint = .true. or check_Steady = .true.)
+      !
+      call reacdyn_pint(output, option, boundary, f, ip, write_steady = .true.)
+
+      ! Calculate Block-Average of steady-state properties
+      ! (if check_blockave = .true.)
+      !
+      call calc_blockave(input, output, option, boundary, ic, fwrk)
+
+      ! Conduct Cumulative analysis 
+      ! (if check_cumulative = .true.)
+      !
+      call calc_cumulative(input, output, option, boundary, ic, fwrk)
+
+      ! Conduct Sensitivity-Error analysis
+      ! (if check_senserr = .true.)
+      !
+      call calc_senserr(input, output, option, boundary, ip, ic, fwrk)
+
+
+      ! Extend timescale of Pj by solving IEs
+      ! (if extrapolate = .true.)
+      call reacdyn_tcf(output, option, boundary, f)
+
+    end subroutine analyze
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine setup_perturb(input, option, ic) 
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_input),   intent(in)    :: input      
+      type(s_option),  intent(in)    :: option
+      type(s_inpcond), intent(inout) :: ic 
+
+      ! Local
+      !
+      integer :: nstate, nfile 
+
+      ! Dummy
+      !
+      integer :: is, ifile 
+
+
+      if (.not. option%use_perturbed_traj) return
+
       write(iw,*)
-      write(iw,'("Analyze> Print out TCFs")')
+      write(iw,'("Analyze> Read f_unperturbed_id file")')
+      write(iw,'("Note: unperturbed state info.&
+                & is used only if use_perturbed_traj = .true.")')
+
+      ! Setup
+      !
+      nfile  = input%ncv
+      nstate = option%nstate 
+
+      ! Get unperturbed state id for each file
+      !
+      allocate(ic%unperturbed_ids(nfile), ic%use_for_Rij(nfile))
+      call read_f_unperturbed_id(option, nfile, ic%unperturbed_ids, ic%use_for_Rij)
+      do ifile = 1, nfile
+        write(iw,'(3i10)') ifile, ic%unperturbed_ids(ifile), ic%use_for_Rij(ifile)
+      end do
+      
+      ! Get # of files for each unperturbed state
+      !
+      allocate(ic%nfile_each_state(nstate))
+      allocate(ic%nfile_to_be_read(nstate))
+      allocate(ic%ista(nstate), ic%iend(nstate))
+
+      ic%nfile_each_state = 0
+      do ifile = 1, nfile
+        is                      = ic%unperturbed_ids(ifile)
+        ic%nfile_each_state(is) = ic%nfile_each_state(is) + 1
+      end do
+
+      ! Initial setting (will not be changed if check_senserr = .false.)
+      !
+      do is = 1, nstate
+        ic%nfile_to_be_read(is) = ic%nfile_each_state(is)  
+      end do
+
+      ! Initial setting (will not be changed if check_blockave = .false.)
+      !
+      do is = 1, nstate
+        ic%ista(is) = 1
+        ic%iend(is) = ic%nfile_each_state(is)
+      end do
+!
+    end subroutine setup_perturb 
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine write_IEfunc(output, option, boundary, f) 
+!-----------------------------------------------------------------------
+      implicit none
+      
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option 
+      type(s_boundary), intent(in)    :: boundary
+      type(s_func),     intent(inout) :: f 
+
+
+      write(iw,*)
+      write(iw,'("Analyze> Write functions involved in IEs")')
       call write_Rij   (output, option, boundary, f)
       call write_P0    (output, option, f)
       call write_Kijk  (output, option, boundary, f)
       call write_Mjk   (output, option, boundary, f)
       write(iw,'(">> Done")')
 
-      ! Setup Boundary conditions 
-      !
+!
+    end subroutine write_IEfunc
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine setup_boundary_cond(output, option, boundary, f) 
+!-----------------------------------------------------------------------
+      implicit none
+      
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option 
+      type(s_boundary), intent(inout) :: boundary
+      type(s_func),     intent(inout) :: f 
+
+
       write(iw,*)
       write(iw,'("Analyze> Setup boundary conditions")')
       call set_reflection(output, option, boundary, f) 
       call set_product   (output, option, boundary, f)
       write(iw,'(">> Done")')
+!
+    end subroutine setup_boundary_cond 
+!-----------------------------------------------------------------------
 
-      if (option%calc_Pint .or. option%calc_Steady) then
-        if (option%calc_Steady) then
-          allocate(ip%prob(nstate), ip%fe(nstate), ip%fe_pair(nstate, nstate))
-        end if
-        call reacdyn_pint(output, option, boundary, f, ip, write_steady = .true.)
-      end if
+!-----------------------------------------------------------------------
+    subroutine calc_blockave(input, output, option, boundary, ic, fwrk) 
+!-----------------------------------------------------------------------
+      implicit none
+     
+      type(s_input),    intent(in)    :: input 
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_boundary), intent(inout) :: boundary
+      type(s_inpcond),  intent(inout) :: ic 
+      type(s_fwrk),     intent(inout) :: fwrk 
 
-      if (option%check_senserr .and. (option%calc_Pint .or. option%calc_Steady)) then
-        write(iw,*)
-        write(iw,'("Analyze> Start Sensitivity analysis of steady-state properties")')
+      ! I/O
+      !
+      character(len=MaxChar) :: fname
 
-        allocate(ipse(nstate))
+      ! Local
+      !
+      integer      :: nstate, block_size
+      type(s_func) :: fs
 
+      ! Dummy
+      !
+      integer :: is, iblock
+
+      ! Array
+      !
+      type(s_infprop), allocatable :: ipse(:)
+
+
+      if (.not. option%check_blockave) return
+
+      write(iw,*)
+      write(iw,'("Analyze> Start Block analysis of steady-state properties")')
+
+      ! Setup
+      !
+      nstate = option%nstate
+
+      ! Allocate
+      !
+      allocate(ipse(option%nblock))
+
+      do iblock = 1, option%nblock
+      
+        write(iw,'("Block ", i0)') iblock
+
+        ! Set Start and End trajectories 
+        !
+        write(iw,'("  File block")')
         do is = 1, nstate
+          block_size  = ic%nfile_each_state(is) / option%nblock
+          ic%ista(is) = block_size * (iblock - 1) + 1
+          ic%iend(is) = block_size * iblock
+          write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
+        end do
+        write(iw,*)
 
-          allocate(ipse(is)%prob(nstate), ipse(is)%fe(nstate), ipse(is)%fe_pair(nstate, nstate))
+        ! Calculate Kernels
+        !
+        call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
+                          set_boundary = .false., verbose = .false.)
 
-          ! Initialize
-          !
-          do js = 1, nstate
-            ic%nfile_to_be_read(js) = ic%nfile_each_state(js)
+        ! Setup Boundary conditions
+        !
+        call set_reflection(output, option, boundary, fs) 
+        call set_product   (output, option, boundary, fs)
+
+        ! Calculate steady-state properties
+        !
+        write(fname,'(a,".steady.",i4.4)') trim(output%fhead), iblock
+        call reacdyn_pint(output, option, boundary, fs, ipse(iblock), &
+                          write_steady = .true., fname_out = fname)
+      end do 
+
+!
+    end subroutine calc_blockave 
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine calc_cumulative(input, output, option, boundary, ic, fwrk) 
+!-----------------------------------------------------------------------
+      implicit none
+     
+      type(s_input),    intent(in)    :: input 
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_boundary), intent(inout) :: boundary
+      type(s_inpcond),  intent(inout) :: ic 
+      type(s_fwrk),     intent(inout) :: fwrk 
+
+      ! I/O
+      !
+      character(len=MaxChar) :: fname
+
+      ! Local
+      !
+      integer      :: nstate, block_size
+      type(s_func) :: fs
+
+      ! Dummy
+      !
+      integer :: is, iblock
+
+      ! Array
+      !
+      type(s_infprop), allocatable :: ipse(:)
+
+
+      if (.not. option%check_cumulative) return 
+
+      write(iw,*)
+      write(iw,'("Analyze> Start Cumulative analysis of steady-state properties")')
+
+      ! Setup
+      !
+      nstate = option%nstate
+
+      ! Allocate
+      !
+      allocate(ipse(option%ncum))
+
+      do iblock = 1, option%ncum
+      
+        write(iw,'("Block ", i0)') iblock
+
+        ! Set Start and End trajectories 
+        !
+        write(iw,'("  File block")')
+        if (option%cumdirec == CumDirecIncrease) then
+          do is = 1, nstate
+            block_size  = ic%nfile_each_state(is) / option%ncum
+            ic%ista(is) = 1
+            ic%iend(is) = block_size * iblock
+            write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
           end do
+        else if (option%cumdirec == CumDirecDecrease) then
+          do is = 1, nstate
+            block_size  = ic%nfile_each_state(is) / option%ncum
+            ic%ista(is) = block_size * (iblock - 1) + 1
+            ic%iend(is) = ic%nfile_each_state(is)
+            write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
+          end do
+        end if
+        write(iw,*)
 
-          ! Set # of files to be read for specific state
-          !
-          if (option%is_reflect(is) .or. option%is_product(is)) cycle
-          write(iw,'("Checking state ", i0)') is
-          
-          ic%nfile_to_be_read(is) = ic%nfile_to_be_read(is) * 0.5d0 
+        ! Calculate Kernels
+        !
+        call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
+                          set_boundary = .false., verbose = .false.)
 
-          ! Calculate Kernels
-          !
-          call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
-                            set_boundary = .false., verbose = .false.)
+        ! Setup Boundary conditions
+        !
+        call set_reflection(output, option, boundary, fs) 
+        call set_product   (output, option, boundary, fs)
 
-          ! Setup Boundary conditions
-          !
-          call set_reflection(output, option, boundary, fs) 
-          call set_product   (output, option, boundary, fs)
+        ! Calculate steady-state properties
+        !
+        write(fname,'(a,".steady.",i4.4)') trim(output%fhead), iblock
+        call reacdyn_pint(output, option, boundary, fs, ipse(iblock), &
+                          write_steady = .true., fname_out = fname)
+      end do 
 
-          ! Calculate steady-state properties
-          !
-          call reacdyn_pint(output, option, boundary, fs, ipse(is), &
-                            write_steady = .false.)
+!
+    end subroutine calc_cumulative
+!-----------------------------------------------------------------------
 
-          if (option%calc_Steady) then
+!-----------------------------------------------------------------------
+    subroutine calc_senserr(input, output, option, boundary, ip, ic, fwrk) 
+!-----------------------------------------------------------------------
+      implicit none
+     
+      type(s_input),    intent(in)    :: input 
+      type(s_output),   intent(in)    :: output
+      type(s_option),   intent(in)    :: option
+      type(s_boundary), intent(inout) :: boundary
+      type(s_infprop),  intent(inout) :: ip
+      type(s_inpcond),  intent(inout) :: ic 
+      type(s_fwrk),     intent(inout) :: fwrk 
 
-            if (.not. allocated(festdev)) then
-              allocate(festdev(nstate))
-            end if
+      ! I/O
+      !
+      integer                :: io
+      character(len=MaxChar) :: fname
 
-            festdev(is) = 0.0d0
-            nfepair     = 0
-            do js = 1, nstate - 1
-              if (option%is_reflect(js) .or. option%is_product(js)) cycle 
-              do ks = js + 1, nstate
-                if (option%is_reflect(ks) .or. option%is_product(ks)) cycle
-                nfepair = nfepair + 1
-                festdev(is) = festdev(is) + (ipse(is)%fe_pair(ks, js) - ip%fe_pair(ks, js))**2
-              end do
-            end do
-            festdev(is) = sqrt(festdev(is)/dble(nfepair))
+      ! Local
+      !
+      integer      :: nstate, nfepair
+      type(s_func) :: fs
+
+      ! Dummy
+      !
+      integer :: is, js, ks
+
+      ! Array
+      !
+      type(s_infprop), allocatable :: ipse(:)
+      real(8),         allocatable :: festdev(:)
+
+
+      if (.not. option%check_senserr) return
+
+      write(iw,*)
+      write(iw,'("Analyze> Start Sensitivity analysis of steady-state properties")')
+
+      ! Setup
+      !
+      nstate = option%nstate
+
+      ! Allocate
+      !
+      allocate(ipse(nstate))
+
+      do is = 1, nstate
+
+        allocate(ipse(is)%prob(nstate))
+        allocate(ipse(is)%fe(nstate))
+        allocate(ipse(is)%fe_pair(nstate, nstate))
+
+        ! Initialize
+        !
+        do js = 1, nstate
+          ic%nfile_to_be_read(js) = ic%nfile_each_state(js)
+        end do
+
+        ! Set # of files to be read for specific state
+        !
+        if (option%is_reflect(is) .or. option%is_product(is)) cycle
+        write(iw,'("Checking state ", i0)') is
+        
+        ic%nfile_to_be_read(is) = ic%nfile_to_be_read(is) * 0.5d0 
+
+        ! Calculate Kernels
+        !
+        call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
+                          set_boundary = .false., verbose = .false.)
+
+        ! Setup Boundary conditions
+        !
+        call set_reflection(output, option, boundary, fs) 
+        call set_product   (output, option, boundary, fs)
+
+        ! Calculate steady-state properties
+        !
+        call reacdyn_pint(output, option, boundary, fs, ipse(is), &
+                          write_steady = .false.)
+
+        if (option%calc_Steady) then
+
+          if (.not. allocated(festdev)) then
+            allocate(festdev(nstate))
           end if
 
-        end do
+          festdev(is) = 0.0d0
+          nfepair     = 0
+          do js = 1, nstate - 1
+            if (option%is_reflect(js) .or. option%is_product(js)) cycle 
+            do ks = js + 1, nstate
+              if (option%is_reflect(ks) .or. option%is_product(ks)) cycle
+              nfepair = nfepair + 1
+              festdev(is) = festdev(is) + (ipse(is)%fe_pair(ks, js) - ip%fe_pair(ks, js))**2
+            end do
+          end do
+          festdev(is) = sqrt(festdev(is)/dble(nfepair))
+        end if
 
-        write(fname,'(a,".senserr")') trim(output%fhead)
-        call open_file(fname, io)
-        do is = 1, nstate
-          if (option%is_reflect(is) .or. option%is_product(is)) cycle
-          write(io,'(i5, f15.7)') is, festdev(is)
-        end do
-        close(io)
-        write(iw,'(">> Done")') 
-      end if
+      end do
 
-      if (option%extrapolate) then
-
-        write(iw,*)
-        write(iw,'("Analyze> Start propagation")')
-
-        ! Extend timescale 
-        !
-        call reacdyn_tcf(output, option, boundary, f)
-
-        write(iw,'(">> Done")')
-
-      end if 
-
-    end subroutine analyze
+      write(fname,'(a,".senserr")') trim(output%fhead)
+      call open_file(fname, io)
+      do is = 1, nstate
+        if (option%is_reflect(is) .or. option%is_product(is)) cycle
+        write(io,'(i5, f15.7)') is, festdev(is)
+      end do
+      close(io)
+      write(iw,'(">> Done")') 
+!
+    end subroutine calc_senserr
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
@@ -473,6 +736,18 @@ module mod_analyze
             end if
           end if
 
+          ! For block average or cumulative analysis
+          !    
+          if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
+            id = ic%unperturbed_ids(ifile)
+            if (id > 0) then
+              ncount_traj(id) = ncount_traj(id) + 1
+              if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                cycle
+              end if
+            end if
+          end if
+
           if (vb) then
             write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
           end if
@@ -543,6 +818,18 @@ module mod_analyze
               ncount_traj(id) = ncount_traj(id) + 1
 
               if (ncount_traj(id) > ic%nfile_to_be_read(id)) then
+                cycle
+              end if
+            end if
+          end if
+
+          ! For block average or cumulative analysis
+          !    
+          if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
+            id = ic%unperturbed_ids(ifile)
+            if (id > 0) then
+              ncount_traj(id) = ncount_traj(id) + 1
+              if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
                 cycle
               end if
             end if

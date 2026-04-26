@@ -25,12 +25,21 @@ subroutine show_title
 !-----------------------------------------------------------------------
   implicit none
 
-  write(6,'("==================================================")')
+  write(6,'("========================================================")')
   write(6,*)
-  write(6,'("               I  E  P  D  Y  N")')
-  write(6,'("Integral-Equation formalism of Population DYNamins")')
+  write(6,'("                    I  E  P  D  Y  N")')
   write(6,*)
-  write(6,'("==================================================")') 
+  write(6,'("   Integral-Equation formalism of Population DYNamins")')
+  write(6,*)
+  write(6,'("========================================================")')
+  write(6,'("[Developer]")')
+  write(6,'("Kento Kasahara (The Univ. of Osaka)")')
+  write(6,*)
+  write(6,'("[Reference]")')
+  write(6,'("K. Kasahara, R. Okabe, C. A. Chang, T. Mori, and N. Matubayasi,")')
+  write(6,'("IEPDYN: Integral-equation formalism of population dynamics,")')
+  write(6,'("J. Chem. Phys., 164, 124112 (2026).")')
+  write(6,*)
 
 end subroutine show_title
 !-----------------------------------------------------------------------

@@ -16,7 +16,12 @@ module mod_ctrl
   integer,      parameter, public :: InputTypeTimeSeries   = 1
   integer,      parameter, public :: InputTypeHistogram    = 2
   character(*), parameter, public :: InputTypes(2) = (/'TIMESERIES', &
-                                                       'HISTOGRAM '/) 
+                                                       'HISTOGRAM '/)
+
+  integer,      parameter, public :: CumDirecIncrease = 1
+  integer,      parameter, public :: CumDirecDecrease = 2 
+  character(*), parameter, public :: CumDirecTypes(2) = (/'INCREASE', &
+                                                          'DECREASE'/)
 
   ! structures
   !
@@ -31,8 +36,11 @@ module mod_ctrl
     logical :: calc_Steady          = .false.
     logical :: check_Kijk           = .false.
     logical :: check_senserr        = .false.
+    logical :: check_blockave       = .false.
+    logical :: check_cumulative     = .false.
 
-    integer :: input_type    = InputTypeTimeSeries
+    integer :: input_type           = InputTypeTimeSeries
+    integer :: cumdirec             = CumDirecIncrease
 
     integer :: nmol                               = NotSpecified 
     integer :: ndim                               = NotSpecified 
@@ -42,6 +50,8 @@ module mod_ctrl
     integer :: dissociate_state_ids(MaxStates)    = NotSpecified
     integer :: initial_state_ids   (MaxStates)    = NotSpecified
     integer :: nkmax                              = 1000
+    integer :: nblock                             = 5
+    integer :: ncum                               = 10
 
     ! File names 
     !
@@ -163,8 +173,11 @@ module mod_ctrl
       logical :: calc_Steady          = .false.
       logical :: check_Kijk           = .false.
       logical :: check_senserr        = .false.
+      logical :: check_blockave       = .false.
+      logical :: check_cumulative     = .false.
 
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
+      character(len=MaxChar) :: cumdirec         = 'INCREASE'
       character(len=MaxChar) :: f_unperturbed_id = '' 
       
       integer :: nmol                            = NotSpecified
@@ -175,6 +188,8 @@ module mod_ctrl
       integer :: dissociate_state_ids(MaxStates) = NotSpecified
       integer :: initial_state_ids(MaxStates)    = NotSpecified
       integer :: nkmax                           = 1000
+      integer :: nblock                          = 5
+      integer :: ncum                            = 10
       real(8) :: temperature                     = 300.0d0
       real(8) :: dt
       real(8) :: t_sparse
@@ -201,9 +216,12 @@ module mod_ctrl
         extrapolate,          &
         check_Kijk,           &
         check_senserr,        &
+        check_blockave,       &
+        check_cumulative,     &
         calc_Pint,            &
         calc_Steady,          &
         input_type,           &
+        cumdirec,             &
         f_unperturbed_id,     &
         nmol,                 &
         ndim,                 &
@@ -213,6 +231,8 @@ module mod_ctrl
         dissociate_state_ids, &
         initial_state_ids,    &
         nkmax,                &
+        nblock,               &
+        ncum,                 &
         temperature,          &
         dt,                   &
         t_sparse,             &
@@ -234,6 +254,7 @@ module mod_ctrl
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
+      write(iw,'("check_blockave       = ", a)')   get_tof(check_blockave)
       write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
       write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
       write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
@@ -242,7 +263,8 @@ module mod_ctrl
       write(iw,'("nmol                 = ", i0)')     nmol
       write(iw,'("ndim                 = ", i0)')     ndim
       write(iw,'("nstate               = ", i0)')     nstate
-      write(iw,'("temperature          = ", f20.10)') temperature 
+      write(iw,'("temperature          = ", f20.10)') temperature
+      write(iw,'("nblock               = ", i0)')     nblock 
 
       write(iw,'("dt                   = ", f20.10)') dt
       write(iw,'("t_sparse             = ", f20.10)') t_sparse
@@ -345,6 +367,13 @@ module mod_ctrl
       end if
       option%input_type = iopt
 
+      iopt = get_opt(cumdirec, CumDirecTypes, ierr)
+      if (ierr /= 0) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("cumdirec = ",a," is not available.")') trim(cumdirec)
+      end if
+      option%cumdirec = iopt
+
       option%use_perturbed_traj   = use_perturbed_traj
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
@@ -353,6 +382,8 @@ module mod_ctrl
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
       option%check_senserr        = check_senserr
+      option%check_blockave       = check_blockave
+      option%check_cumulative     = check_cumulative
       option%calc_Pint            = calc_Pint
       option%calc_Steady          = calc_Steady
 
@@ -375,6 +406,8 @@ module mod_ctrl
       option%initial_state_ids    = initial_state_ids
 
       option%nkmax                = nkmax
+      option%nblock               = nblock
+      option%ncum                 = ncum
       option%temperature          = temperature
       option%dt                   = dt
       option%t_sparse             = t_sparse
@@ -459,17 +492,33 @@ module mod_ctrl
         stop
       end if
 
-      if (check_senserr .and. output_histogram) then
-        write(iw,'("Read_Ctrl_Option> Error.")')
-        write(iw,'("output_histogram should be turned off when check_senserr = .true.")')
-        stop
+      if (output_histogram) then
+        if (check_senserr .or. check_blockave .or. check_cumulative) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("output_histogram should be turned off when&
+                    & check_senserr, check_blockave, or check_cumulative is true")')
+          stop
+        end if
       end if
 
-      if (check_senserr .and. .not. use_perturbed_traj) then
-        write(iw,'("Read_Ctrl_Option> Error.")')
-        write(iw,'("use_perturbed_traj should be turned on when check_senserr = .true.")')
-        stop
-      end if 
+      i = 0
+      if (check_senserr)    i = i + 1
+      if (check_blockave)   i = i + 1
+      if (check_cumulative) i = i + 1
+
+      if (i == 1) then
+        if (.not. use_perturbed_traj) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("use_perturbed_traj should be turned on when &
+                     &check_senserr, check_blockave, and check_cumulative is true.")')
+          stop
+        end if
+      else if (i > 1) then
+         write(iw,'("Read_Ctrl_Option> Error.")')
+         write(iw,'("check_blockave, check_senserr, and check_cumulative &
+                    &can not be performed at the same time")')
+         stop
+      end if
 
       ! Memory allocation
       !
