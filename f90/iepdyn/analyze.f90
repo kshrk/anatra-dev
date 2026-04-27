@@ -742,8 +742,10 @@ module mod_analyze
             id = ic%unperturbed_ids(ifile)
             if (id > 0) then
               ncount_traj(id) = ncount_traj(id) + 1
-              if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
-                cycle
+              if (.not. option%is_errex(id)) then
+                if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                  cycle
+                end if
               end if
             end if
           end if
@@ -829,8 +831,10 @@ module mod_analyze
             id = ic%unperturbed_ids(ifile)
             if (id > 0) then
               ncount_traj(id) = ncount_traj(id) + 1
-              if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
-                cycle
+              if (.not. option%is_errex(id)) then
+                if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                  cycle
+                end if
               end if
             end if
           end if

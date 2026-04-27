@@ -29,7 +29,7 @@ subroutine show_title
   write(6,*)
   write(6,'("                    I  E  P  D  Y  N")')
   write(6,*)
-  write(6,'("   Integral-Equation formalism of Population DYNamins")')
+  write(6,'("   Integral-Equation formalism of Population DYNamics")')
   write(6,*)
   write(6,'("========================================================")')
   write(6,'("[Developer]")')

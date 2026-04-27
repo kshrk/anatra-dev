@@ -18,6 +18,11 @@ module mod_ctrl
   character(*), parameter, public :: InputTypes(2) = (/'TIMESERIES', &
                                                        'HISTOGRAM '/)
 
+  integer,      parameter, public :: ErrexTypeExclude = 1
+  integer,      parameter, public :: ErrexTypeInclude = 2
+  character(*), parameter, public :: ErrexTypes(2)    = (/'EXCLUDE', &
+                                                          'INCLUDE'/)
+
   integer,      parameter, public :: CumDirecIncrease = 1
   integer,      parameter, public :: CumDirecDecrease = 2 
   character(*), parameter, public :: CumDirecTypes(2) = (/'INCREASE', &
@@ -40,15 +45,17 @@ module mod_ctrl
     logical :: check_cumulative     = .false.
 
     integer :: input_type           = InputTypeTimeSeries
+    integer :: errex_type           = ErrexTypeExclude 
     integer :: cumdirec             = CumDirecIncrease
 
     integer :: nmol                               = NotSpecified 
     integer :: ndim                               = NotSpecified 
     integer :: nstate                             = NotSpecified
-    integer :: reflection_state_ids(MaxStates)    = NotSpecified 
-    integer :: product_state_ids   (MaxStates)    = NotSpecified
-    integer :: dissociate_state_ids(MaxStates)    = NotSpecified
-    integer :: initial_state_ids   (MaxStates)    = NotSpecified
+    integer :: reflection_state_ids   (MaxStates) = NotSpecified 
+    integer :: product_state_ids      (MaxStates) = NotSpecified
+    integer :: dissociate_state_ids   (MaxStates) = NotSpecified
+    integer :: initial_state_ids      (MaxStates) = NotSpecified
+    integer :: err_exception_state_ids(MaxStates) = NotSpecified
     integer :: nkmax                              = 1000
     integer :: nblock                             = 5
     integer :: ncum                               = 10
@@ -87,7 +94,8 @@ module mod_ctrl
     logical, allocatable :: is_initial  (:)
     logical, allocatable :: is_product  (:)
     logical, allocatable :: is_reflect  (:)
-    logical, allocatable :: is_dissoc   (:) 
+    logical, allocatable :: is_dissoc   (:)
+    logical, allocatable :: is_errex    (:) 
     real(8), allocatable :: state_def   (:, :, :)
     real(8), allocatable :: state_weight(:)
     real(8), allocatable :: state_weight_unnorm(:)
@@ -177,20 +185,22 @@ module mod_ctrl
       logical :: check_cumulative     = .false.
 
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
+      character(len=MaxChar) :: errex_type       = 'EXCLUDE'
       character(len=MaxChar) :: cumdirec         = 'INCREASE'
       character(len=MaxChar) :: f_unperturbed_id = '' 
       
-      integer :: nmol                            = NotSpecified
-      integer :: ndim                            = NotSpecified
-      integer :: nstate                          = NotSpecified
-      integer :: reflection_state_ids(MaxStates) = NotSpecified
-      integer :: product_state_ids(MaxStates)    = NotSpecified
-      integer :: dissociate_state_ids(MaxStates) = NotSpecified
-      integer :: initial_state_ids(MaxStates)    = NotSpecified
-      integer :: nkmax                           = 1000
-      integer :: nblock                          = 5
-      integer :: ncum                            = 10
-      real(8) :: temperature                     = 300.0d0
+      integer :: nmol                               = NotSpecified
+      integer :: ndim                               = NotSpecified
+      integer :: nstate                             = NotSpecified
+      integer :: reflection_state_ids   (MaxStates) = NotSpecified
+      integer :: product_state_ids      (MaxStates) = NotSpecified
+      integer :: dissociate_state_ids   (MaxStates) = NotSpecified
+      integer :: initial_state_ids      (MaxStates) = NotSpecified
+      integer :: err_exception_state_ids(MaxStates) = NotSpecified
+      integer :: nkmax                              = 1000
+      integer :: nblock                             = 5
+      integer :: ncum                               = 10
+      real(8) :: temperature                        = 300.0d0
       real(8) :: dt
       real(8) :: t_sparse
       real(8) :: t_range
@@ -200,44 +210,47 @@ module mod_ctrl
       ! Local
       !
       integer :: nreflect = 0, nproduct = 0, ndissoc = 0, ninitial = 0, nselect = 0
+      integer :: nerrex   = 0
 
       ! Dummy
       !
-      integer :: i, j, it
+      integer :: i, j, it, id
       integer :: iopt, ierr
 
 
-      namelist /option_param/ &
-        use_perturbed_traj,   &
-        use_reflection_state, &
-        use_product_state,    &
-        use_dissociate_state, &
-        output_histogram,     &
-        extrapolate,          &
-        check_Kijk,           &
-        check_senserr,        &
-        check_blockave,       &
-        check_cumulative,     &
-        calc_Pint,            &
-        calc_Steady,          &
-        input_type,           &
-        cumdirec,             &
-        f_unperturbed_id,     &
-        nmol,                 &
-        ndim,                 &
-        nstate,               &
-        reflection_state_ids, &
-        product_state_ids,    &
-        dissociate_state_ids, &
-        initial_state_ids,    &
-        nkmax,                &
-        nblock,               &
-        ncum,                 &
-        temperature,          &
-        dt,                   &
-        t_sparse,             &
-        t_range,              &
-        t_extend,             &
+      namelist /option_param/   &
+        use_perturbed_traj,     &
+        use_reflection_state,   &
+        use_product_state,      &
+        use_dissociate_state,   &
+        output_histogram,       &
+        extrapolate,            &
+        check_Kijk,             &
+        check_senserr,          &
+        check_blockave,         &
+        check_cumulative,       &
+        calc_Pint,              &
+        calc_Steady,            &
+        input_type,             &
+        errex_type,             &
+        cumdirec,               &
+        f_unperturbed_id,       &
+        nmol,                   &
+        ndim,                   &
+        nstate,                 &
+        reflection_state_ids,   &
+        product_state_ids,      &
+        dissociate_state_ids,   &
+        initial_state_ids,      &
+        err_exception_state_ids,&
+        nkmax,                  &
+        nblock,                 &
+        ncum,                   &
+        temperature,            &
+        dt,                     &
+        t_sparse,               &
+        t_range,                &
+        t_extend,               &
         dt_tcfout
 
       rewind io 
@@ -280,6 +293,7 @@ module mod_ctrl
         write(iw,'("nstate should be specified.")')
         stop
       end if
+
 
       ! Reflection
       !
@@ -367,6 +381,13 @@ module mod_ctrl
       end if
       option%input_type = iopt
 
+      iopt = get_opt(errex_type, ErrexTypes, ierr)
+      if (ierr /= 0) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("errex_type = ",a," is not available.")') trim(errex_type)
+      end if
+      option%errex_type = iopt
+
       iopt = get_opt(cumdirec, CumDirecTypes, ierr)
       if (ierr /= 0) then
         write(iw,'("Read_Ctrl_Option> Error.")')
@@ -414,6 +435,26 @@ module mod_ctrl
       option%t_range              = t_range
       option%t_extend             = t_extend
       option%dt_tcfout            = dt_tcfout
+
+      ! Error exception states (hidden options)
+      ! is_errex(is) = .true.  ---> exclude state is for error estimation
+      ! is_errex(is) = .false. ---> include
+
+      ! if errex_type = EXCLUDE, specify states to be excluded
+      !                 INCLUDE, specify states to be included
+      allocate(option%is_errex(nstate))
+      if (option%errex_type == ErrexTypeExclude) option%is_errex = .false.
+      if (option%errex_type == ErrexTypeInclude) option%is_errex = .true.
+
+      nerrex = 0
+      do i = 1, MaxStates
+        if (err_exception_state_ids(i) /= NotSpecified) then
+          id = err_exception_state_ids(i)
+          write(iw,'("err_exception_state_ids  ", i0, " : ", i0)') i, id 
+          if (option%errex_type == ErrexTypeExclude) option%is_errex(id) = .true.
+          if (option%errex_type == ErrexTypeInclude) option%is_errex(id) = .false.  
+        end if
+      end do
 
       ! Setup time grids
       !
