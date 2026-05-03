@@ -29,6 +29,9 @@ module mod_analyze
     integer, allocatable :: n_influx_boundary(:)
     integer, allocatable :: influx_boundary(:, :)
     logical, allocatable :: conv_direc(:)
+
+    logical, allocatable :: is_cQij(:)
+    real(8), allocatable :: cQij(:)
   end type s_boundary
 
   type :: s_func
@@ -113,6 +116,11 @@ module mod_analyze
       ! Setup boundary conditions 
       !
       call setup_boundary_cond(output, option, boundary, f)
+
+      ! Setup constant Qij 
+      ! (if use_constant_Qij = .true.)
+      !
+      call setup_constant_Qij(option, boundary)
 
       ! Evaluate steady-state properties 
       ! (if check_Pint = .true. or check_Steady = .true.)
@@ -249,6 +257,69 @@ module mod_analyze
       write(iw,'(">> Done")')
 !
     end subroutine setup_boundary_cond 
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine setup_constant_Qij(option, boundary) 
+!-----------------------------------------------------------------------
+      implicit none
+      
+      type(s_option),   intent(in)    :: option 
+      type(s_boundary), intent(inout) :: boundary
+
+      ! I/O
+      !
+      integer :: io
+
+      ! Local
+      !
+      integer :: nb 
+
+      ! Dummy
+      !
+      integer :: is, js, ib
+      real(8) :: val
+
+
+      if (.not. option%use_constant_Qij) return
+
+      write(iw,*)
+      write(iw,'("Analyze> Setup constant Qij")')
+
+      ! Setup
+      !
+      nb = boundary%nboundary
+
+      ! Allocate
+      !
+      if (.not. allocated(boundary%is_cQij)) then
+        allocate(boundary%is_cQij(nb))
+        allocate(boundary%cQij(nb))
+      end if
+      boundary%is_cQij = .false.
+      boundary%cQij    = 0.0d0
+
+      ! Read
+      !
+      call open_file(option%f_cQij, io)
+
+      do while (.true.)
+        read(io, *, end = 100) is, js, val
+        ib = boundary%p2b(is, js)
+        if (ib == 0) then
+          write(iw,'("Setup_Constant_Qij> Error.")')
+          write(iw,'("Constant-Qij value at unconnected (i, j) &
+                     &has been detected")')
+          stop
+        end if
+        boundary%is_cQij(ib) = .true.
+        boundary%cQij(ib)    = val
+      end do
+
+ 100  close(io)
+      write(iw,'(">> Done")')
+!
+    end subroutine setup_constant_Qij
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------

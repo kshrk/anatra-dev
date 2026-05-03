@@ -35,6 +35,7 @@
       !
       real(8), allocatable :: Qij(:, :)
       real(8), allocatable :: Pi(:, :)
+      real(8), allocatable :: Pold(:), Pnew(:)
 
       real(8), allocatable :: Qint(:), Mfinal(:)
 
@@ -56,6 +57,10 @@
       nt_tcfout = option%nt_tcfout
       dt        = option%dt_out
       nboundary = boundary%nboundary
+
+      ! Allocate
+      !
+      allocate(Pold(nstate), Pnew(nstate))
 
       nt_life = 0
       do ib = -nboundary, nboundary
@@ -188,6 +193,11 @@
             if (boundary%conv_direc(-ib)) cycle
           end if
 
+          if (option%use_constant_Qij .and. boundary%is_cQij(ib)) then
+            Qij(ib, it) = boundary%cQij(ib)
+            cycle
+          end if
+
           is1  = boundary%b2p(1, ib)
           is2  = boundary%b2p(2, ib)
 
@@ -237,37 +247,59 @@
 
         ! Calc. P
         !
-        !!$omp do schedule(dynamic)
         do is = 1, nstate
 
-          pval = 0.0d0
-          if (istep <= nt_range .and. option%is_initial(is)) then
-            pval = pval + f%P0(it, is)
+          ! Initial
+          !
+          Pnew(is) = 0.0d0
+          if (istep == 0) then
+            Pold(is) = option%state_weight(is)
           end if
 
-          if (istep == 0) then
-            Pi(it, is) = pval
-            cycle
-          end if
+          ! Update
+          !
+          Pnew(is) = Pold(is)
 
           do inflx = 1, boundary%n_influx_boundary(is)
-            ib = boundary%influx_boundary(inflx, is)
-            jsta = max(0, istep - nt_life)
-            rval = 0.0d0
-            do it_mfr = 2, tind_mfr_final(ib)
-              jstep  = tind_mfr(it_mfr, ib)
-              it_rel = istep - jstep - jsta
-              if (it_rel < 0) cycle 
-              rval = rval + dt * mfr(it_mfr, ib) * Qij(it_rel, ib)
-            end do
-
-            pval = pval + rval
-            pval = pval + Mfinal(ib) * Qint(ib)
+            ib       = boundary%influx_boundary(inflx, is)
+            Pnew(is) = Pnew(is) + (Qij(it, ib) - Qij(it, -ib)) * dt
           end do
-          Pi(it, is) = pval
+
+          Pi(it, is) = Pold(is)
+
         end do
-        !!$omp end do
-        !!$omp barrier
+
+!        !!$omp do schedule(dynamic)
+!        do is = 1, nstate
+!
+!          pval = 0.0d0
+!          if (istep <= nt_range .and. option%is_initial(is)) then
+!            pval = pval + f%P0(it, is)
+!          end if
+!
+!          if (istep == 0) then
+!            Pi(it, is) = pval
+!            cycle
+!          end if
+!
+!          do inflx = 1, boundary%n_influx_boundary(is)
+!            ib = boundary%influx_boundary(inflx, is)
+!            jsta = max(0, istep - nt_life)
+!            rval = 0.0d0
+!            do it_mfr = 2, tind_mfr_final(ib)
+!              jstep  = tind_mfr(it_mfr, ib)
+!              it_rel = istep - jstep - jsta
+!              if (it_rel < 0) cycle 
+!              rval = rval + dt * mfr(it_mfr, ib) * Qij(it_rel, ib)
+!            end do
+!
+!            pval = pval + rval
+!            pval = pval + Mfinal(ib) * Qint(ib)
+!          end do
+!          Pi(it, is) = pval
+!        end do
+!        !!$omp end do
+!        !!$omp barrier
 
         ! Output
         !
@@ -275,7 +307,8 @@
         psum = 0.0d0
         do is = 1, nstate
           if (option%is_initial(is)) then
-            psum = psum + Pi(it, is)
+            !psum = psum + Pi(it, is)
+            psum = psum + Pold(is)
           end if
         end do
         pint = pint + psum * dt
@@ -284,7 +317,7 @@
          
           write(io_q,'(e15.7,2x)', advance = 'no') dt * istep
           write(io_p,'(e15.7,2x)', advance = 'no') dt * istep
-          write(io,  '(3(e15.7,2x))') dt * istep, psum, pint
+          write(io,  '(3(e15.7,2x))') dt * istep, truncate_tiny_val(psum), pint
 
           do ib = -nboundary, nboundary
             if (ib == 0) cycle 
@@ -293,7 +326,7 @@
           write(io_q,*)
 
           do is = 1, nstate
-            write(io_p,'(e15.7,2x)', advance = 'no') Pi(it, is)
+            write(io_p,'(e15.7,2x)', advance = 'no') truncate_tiny_val(Pi(it, is))
           end do
           write(io_p,*)
 
@@ -320,6 +353,9 @@
           !it = it - 1
 
         end if
+
+        Pold(:) = Pnew(:)
+
         !!$omp end single
 
         if (it == nt_life) then
@@ -342,4 +378,26 @@
       deallocate(Qint, Mfinal)
       
     end subroutine reacdyn_tcf 
+!-----------------------------------------------------------------------
+!
+!-----------------------------------------------------------------------
+    function truncate_tiny_val(val)
+!-----------------------------------------------------------------------
+      implicit none
+
+      ! Constants
+      !
+      real(8) :: eps_tr = 1.0d-10
+
+      real(8) :: val
+      real(8) :: truncate_tiny_val
+
+      
+      if (abs(val) < eps_tr) then
+        truncate_tiny_val = 0.0d0 
+      else
+        truncate_tiny_val = val
+      end if
+
+    end function truncate_tiny_val
 !-----------------------------------------------------------------------

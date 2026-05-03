@@ -35,6 +35,7 @@ module mod_ctrl
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
+    logical :: use_constant_Qij     = .false.
     logical :: output_histogram     = .false.
     logical :: extrapolate          = .false.
     logical :: calc_Pint            = .false.
@@ -63,6 +64,7 @@ module mod_ctrl
     ! File names 
     !
     character(len=MaxChar) :: f_unperturbed_id = ''
+    character(len=MaxChar) :: f_cQij           = ''
 
     ! for free-energy calculation 
     !
@@ -175,6 +177,7 @@ module mod_ctrl
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
+      logical :: use_constant_Qij     = .false.
       logical :: output_histogram     = .false.
       logical :: extrapolate          = .false.
       logical :: calc_Pint            = .false.
@@ -187,7 +190,8 @@ module mod_ctrl
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
       character(len=MaxChar) :: errex_type       = 'EXCLUDE'
       character(len=MaxChar) :: cumdirec         = 'INCREASE'
-      character(len=MaxChar) :: f_unperturbed_id = '' 
+      character(len=MaxChar) :: f_unperturbed_id = ''
+      character(len=MaxChar) :: f_cQij           = '' 
       
       integer :: nmol                               = NotSpecified
       integer :: ndim                               = NotSpecified
@@ -223,6 +227,7 @@ module mod_ctrl
         use_reflection_state,   &
         use_product_state,      &
         use_dissociate_state,   &
+        use_constant_Qij,       &
         output_histogram,       &
         extrapolate,            &
         check_Kijk,             &
@@ -235,6 +240,7 @@ module mod_ctrl
         errex_type,             &
         cumdirec,               &
         f_unperturbed_id,       &
+        f_cQij,                 &
         nmol,                   &
         ndim,                   &
         nstate,                 &
@@ -264,6 +270,7 @@ module mod_ctrl
       write(iw,'("use_reflection_state = ", a)')   get_tof(use_reflection_state)
       write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
       write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
+      write(iw,'("use_constant_Qij     = ", a)')   get_tof(use_constant_Qij)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
@@ -271,6 +278,7 @@ module mod_ctrl
       write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
       write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
       write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
+      write(iw,'("f_cQij               = ", a)')   trim(f_cQij)
 
       write(iw,'("extrapolate          = ", a)')      get_tof(extrapolate)
       write(iw,'("nmol                 = ", i0)')     nmol
@@ -399,6 +407,7 @@ module mod_ctrl
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
+      option%use_constant_Qij     = use_constant_Qij
       option%output_histogram     = output_histogram
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
@@ -409,6 +418,7 @@ module mod_ctrl
       option%calc_Steady          = calc_Steady
 
       option%f_unperturbed_id     = f_unperturbed_id
+      option%f_cQij               = f_cQij
 
       option%nmol                 = nmol
       option%ndim                 = ndim
@@ -559,6 +569,15 @@ module mod_ctrl
          write(iw,'("check_blockave, check_senserr, and check_cumulative &
                     &can not be performed at the same time")')
          stop
+      end if
+
+      if (use_constant_Qij) then
+        if (calc_Pint .or. calc_Steady) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("use_constant_Qij can not be used &
+                     &when calc_Pint = .true. or calc_Steady = .true.")')
+          stop
+        end if
       end if
 
       ! Memory allocation
