@@ -91,16 +91,17 @@
       ! Add margin
       !
       nt_life = nt_life + 10
-      allocate(Qij(0:nt_life, -nboundary:nboundary))
-      allocate(Pi(0:nt_life, nstate))
-      allocate(Qint(-nboundary:nboundary), Mfinal(-nboundary:nboundary))
+      allocate(Qij            (0:nt_life, -nboundary:nboundary))
+      allocate(Pi             (0:nt_life, nstate))
+      allocate(Qint           (-nboundary:nboundary))
+      allocate(Mfinal         (-nboundary:nboundary))
 
-      allocate(kfr(0:nt_range, nstate, -nboundary:nboundary))
-      allocate(tind_kfr(0:nt_range, nstate, -nboundary:nboundary))
-      allocate(tind_kfr_final(nstate, -nboundary:nboundary))
-      allocate(mfr(0:nt_range, -nboundary:nboundary))
-      allocate(tind_mfr(0:nt_range, -nboundary:nboundary))
-      allocate(tind_mfr_final(-nboundary:nboundary))
+      allocate(kfr            (0:nt_range, nstate, -nboundary:nboundary))
+      allocate(tind_kfr       (0:nt_range, nstate, -nboundary:nboundary))
+      allocate(tind_kfr_final (nstate, -nboundary:nboundary))
+      allocate(mfr            (0:nt_range, -nboundary:nboundary))
+      allocate(tind_mfr       (0:nt_range, -nboundary:nboundary))
+      allocate(tind_mfr_final (-nboundary:nboundary))
 
       kfr            = 0.0d0
       tind_kfr       = 0
@@ -152,10 +153,10 @@
       write(fname,'(a,".tcf")') trim(output%fhead)
       call open_file(fname, io)
 
-      write(fname,'(a,".q")') trim(output%fhead)
+      write(fname,'(a,".q")')   trim(output%fhead)
       call open_file(fname, io_q)
 
-      write(fname,'(a,".pj")') trim(output%fhead)
+      write(fname,'(a,".pj")')  trim(output%fhead)
       call open_file(fname, io_p)
 
       Qij       = 0.0d0
@@ -348,7 +349,7 @@
           end do
 
           Qij(nt_life, :) = 0.0d0
-          Pi(nt_life, :) = 0.0d0
+          Pi(nt_life, :)  = 0.0d0
 
           !it = it - 1
 
