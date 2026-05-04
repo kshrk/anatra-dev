@@ -277,8 +277,9 @@ module mod_analyze
 
       ! Dummy
       !
-      integer :: is, js, ib
-      real(8) :: val
+      integer                :: is, js, ib
+      real(8)                :: val
+      character(len=MaxChar) :: line
 
 
       if (.not. option%use_constant_Qij) return
@@ -304,7 +305,10 @@ module mod_analyze
       call open_file(option%f_cQij, io)
 
       do while (.true.)
-        read(io, *, end = 100) is, js, val
+        read(io, '(a)', end = 100) line
+        if (line(1:1) == "#") cycle
+        read(line, *) is, js, val
+
         ib = boundary%p2b(is, js)
         if (ib == 0) then
           write(iw,'("Setup_Constant_Qij> Error.")')
@@ -314,6 +318,8 @@ module mod_analyze
         end if
         boundary%is_cQij(ib) = .true.
         boundary%cQij(ib)    = val
+
+        write(iw,'(i5,2x,i5,2x,e15.7)') is, js, boundary%cQij(ib)
       end do
 
  100  close(io)

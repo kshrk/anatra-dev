@@ -195,7 +195,10 @@
           end if
 
           if (option%use_constant_Qij .and. boundary%is_cQij(ib)) then
-            Qij(ib, it) = boundary%cQij(ib)
+            Qij(it, ib) = boundary%cQij(ib)
+            !if (istep == 0) then
+            !  write(iw,'("Constant-Qij ", i5,2x,e15.7)') ib, Qij(ib, it)
+            !end if
             cycle
           end if
 
