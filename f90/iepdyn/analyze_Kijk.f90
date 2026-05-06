@@ -321,6 +321,7 @@
           js1  = boundary%b2p(1, jb)
           js2  = boundary%b2p(2, jb)
           ik   = fwrk%kmesh(is2, is1, js1)
+          if (ik == 0) cycle 
           f%K(:, is2, jb) = fwrk%K(:, ik)
         end do 
       end do
