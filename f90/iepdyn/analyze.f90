@@ -7,6 +7,7 @@ module mod_analyze
   use mod_input
   use mod_output
   use mod_ctrl
+  use mod_random
 
   ! Constants
   !
@@ -94,10 +95,16 @@ module mod_analyze
       type(s_fwrk)     :: fwrk
       type(s_infprop)  :: ip
 
+      integer :: iseed
+
 
       ! Setup
       !
       fwrk%nkmax = option%nkmax
+
+      call get_seed         (iseed)
+      call initialize_random(iseed)
+
 
       ! Read Unperturbed_ID file 
       ! (if use_perturbed_traj = .true.)
@@ -869,7 +876,12 @@ module mod_analyze
        
               ! Update R- and K-functions
               !
-              call update_Rij_wo_normalize(option, state, f)
+              if (option%use_rsto_Rij) then
+                call update_rsto_Rij(option, state, f)
+              else
+                call update_Rij_wo_normalize(option, state, f)
+              end if
+
               call update_Kijk_wo_normalize(option, state, fwrk)
 
             end if

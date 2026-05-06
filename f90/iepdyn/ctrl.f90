@@ -36,6 +36,7 @@ module mod_ctrl
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
     logical :: use_constant_Qij     = .false.
+    logical :: use_rsto_Rij         = .false.
     logical :: output_histogram     = .false.
     logical :: extrapolate          = .false.
     logical :: calc_Pint            = .false.
@@ -178,6 +179,7 @@ module mod_ctrl
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
       logical :: use_constant_Qij     = .false.
+      logical :: use_rsto_Rij         = .false.
       logical :: output_histogram     = .false.
       logical :: extrapolate          = .false.
       logical :: calc_Pint            = .false.
@@ -228,6 +230,7 @@ module mod_ctrl
         use_product_state,      &
         use_dissociate_state,   &
         use_constant_Qij,       &
+        use_rsto_Rij,           &
         output_histogram,       &
         extrapolate,            &
         check_Kijk,             &
@@ -271,6 +274,7 @@ module mod_ctrl
       write(iw,'("use_product_state    = ", a)')   get_tof(use_product_state)
       write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
       write(iw,'("use_constant_Qij     = ", a)')   get_tof(use_constant_Qij)
+      write(iw,'("use_rsto_Rij         = ", a)')   get_tof(use_rsto_Rij)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
@@ -408,6 +412,7 @@ module mod_ctrl
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
       option%use_constant_Qij     = use_constant_Qij
+      option%use_rsto_Rij         = use_rsto_Rij
       option%output_histogram     = output_histogram
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
@@ -578,6 +583,21 @@ module mod_ctrl
                      &when calc_Pint = .true. or calc_Steady = .true.")')
           stop
         end if
+      end if
+
+      if (use_rsto_Rij) then
+        if (option%input_type == InputTypeHistogram) then
+          write(iw,'("Read_Ctrl_Option> Warning.")')
+          write(iw,'("use_rsto_Rij = .true. is effective only if input_type = TIMESERIES.")')
+          write(iw,'(">> changed to use_rsto_Rij = .false.")')
+          option%use_rsto_Rij = .false.
+        end if
+
+        if (.not. option%use_perturbed_traj) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("use_rsto_Rij = .true. should  be used with use_perturbed_traj = .true.")')
+          stop
+        end if 
       end if
 
       ! Memory allocation

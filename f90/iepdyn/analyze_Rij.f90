@@ -1,4 +1,114 @@
 !-----------------------------------------------------------------------
+    subroutine update_rsto_Rij(option, state, f)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option), intent(in)    :: option
+      type(s_state),  intent(in)    :: state
+      type(s_func),   intent(inout) :: f
+
+      ! Local
+      !
+      integer :: nmol, nstep, nt_range, nt_sparse
+      integer :: nini
+      integer :: use_for_Rij
+
+      ! Dummy 
+      !
+      integer :: istep, jstep, ito, imol, iend
+      integer :: is, js, it, it_reac, it_diff, nt
+      integer :: unp_id
+      real(8) :: dt
+
+      ! Arrays
+      !
+      integer, allocatable :: init_set(:)
+      integer, allocatable :: rand(:)
+      
+
+      if (.not. option%use_perturbed_traj) then
+        write(iw,'("Update_Rsto_Rij> Error.")')
+        write(iw,'("use_perturbed_traj should be .true.")')
+        stop
+      end if
+
+      if (.not. (state%use_for_Rij == -1 .or. state%use_for_Rij == 1)) return
+
+      ! Setup
+      !
+      nmol        = option%nmol
+      nstep       = state%nstep
+      unp_id      = state%unperturbed_id
+      use_for_Rij = state%use_for_Rij
+      nt_range    = option%nt_range
+      nt_sparse   = option%nt_sparse
+      dt          = option%dt_out
+
+      ! Allocate
+      !
+      if (.not. allocated(init_set)) then
+        allocate(init_set(nstep))
+        allocate(rand(nstep))
+      end if
+
+      do imol = 1, nmol
+
+        nini     =  0
+        init_set = -1
+
+        ! Check state id at each time step
+        !
+        do jstep = 1, nstep
+          js = state%data(jstep, imol)
+          if (option%is_initial(js)) then
+            nini           = nini + 1
+            init_set(nini) = jstep 
+          end if
+        end do
+
+        ! Generate random numbers
+        !
+        call get_random_integer(nini, 1, nini, .true., rand(1:nini)) 
+
+        ! Generate histogram
+        !
+        do ito = 1, nini * 0.5
+          jstep = init_set(rand(ito))
+          if (jstep + nt_sparse > nstep) cycle
+
+          ! Search reaction time
+          !
+          js      = state%data(jstep, imol)
+          it_reac = -1 
+
+          do istep = nt_sparse + jstep, nstep, nt_sparse
+            is = state%data(istep, imol)
+            if (is /= js) then
+              iend    = istep - nt_sparse
+              it_reac = iend  - jstep
+              exit 
+            end if
+          end do
+
+          if (it_reac == -1) then
+            write(iw,'("Calc_Rij_wo_normalize> ")')
+            write(iw,'("Molecule ", i5, ": No reaction is observed.")') imol
+            cycle 
+          end if
+
+          do istep = 0, it_reac, nt_sparse
+            it_diff              = it_reac - istep
+            it_diff              = int(it_diff / dble(nt_sparse))
+            f%R(it_diff, is, js) = f%R(it_diff, is, js) + 1.0d0 
+          end do
+
+        end do
+      end do
+
+    end subroutine update_rsto_Rij
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
     subroutine update_Rij_wo_normalize(option, state, f)
 !-----------------------------------------------------------------------
       implicit none

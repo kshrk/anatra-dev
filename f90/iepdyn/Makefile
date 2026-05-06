@@ -33,6 +33,8 @@ endif
 #
 OBJ=$(LIB)/util.f90      \
     $(LIB)/const.f90     \
+    $(LIB)/mtwist.f90    \
+    $(LIB)/random.f90    \
     $(LIB)/input.f90     \
     $(LIB)/output.f90    \
     $(LIB)/cv.f90        \
