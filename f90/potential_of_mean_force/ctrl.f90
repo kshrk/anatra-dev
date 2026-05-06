@@ -26,7 +26,7 @@ module mod_ctrl
 
   type :: s_option
 
-    logical :: discretize_scheme      = DiscretizeSchemeCenter
+    integer :: discretize_scheme      = DiscretizeSchemeCenter
     logical :: use_bootstrap          = .false.
     logical :: gen_script_mpl2d       = .false.
     logical :: skip_calc              = .false.
@@ -254,6 +254,8 @@ module mod_ctrl
       write(iw,'("discretize_scheme = ", a)')               trim(discretize_scheme)
       write(iw,'("use_bootstrap     = ", a)')               get_tof(use_bootstrap) 
       write(iw,'("skip_calc         = ", a)')               get_tof(skip_calc)
+
+      write(iw,'("norm_const        = ", f15.7)')           norm_const
 
       write(iw,'("ndim              = ", i0)')              ndim 
       write(iw,'("xyzcol            = ", 3(i0,2x))')        (xyzcol(i), i = 1, ndim)
