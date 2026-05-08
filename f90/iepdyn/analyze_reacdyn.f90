@@ -317,6 +317,18 @@
         end do
         pint = pint + psum * dt
 
+
+        if (istep == 0) then
+          jb = 0
+          do ib = - nboundary, nboundary
+            if (ib == 0) cycle
+            jb  = jb + 1
+            is1 = boundary%b2p(1, ib)
+            is2 = boundary%b2p(2, ib) 
+            write(io_q, '("# Col. ", i0, " : ", i0, " <--- ", i0)') jb + 1, is2, is1 
+          end do
+        end if
+
         if (mod(istep, nt_tcfout) == 0 .or. istep == 0) then
          
           write(io_q,'(e15.7,2x)', advance = 'no') dt * istep
