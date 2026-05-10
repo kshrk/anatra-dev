@@ -60,7 +60,7 @@
         !
         do jstep = 1, nstep
           js = state%data(jstep, imol)
-          if (option%is_initial(js)) then
+          if (unp_id == js .and. option%is_initial(js)) then
             nini           = nini + 1
             init_set(nini) = jstep 
           end if
