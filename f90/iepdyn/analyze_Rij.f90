@@ -60,7 +60,7 @@
         !
         do jstep = 1, nstep
           js = state%data(jstep, imol)
-          if (unp_id == js .and. option%is_initial(js)) then
+          if (js == unp_id .and. option%is_initial(js)) then
             nini           = nini + 1
             init_set(nini) = jstep 
           end if
@@ -79,7 +79,12 @@
           ! Search reaction time
           !
           js      = state%data(jstep, imol)
-          it_reac = -1 
+          it_reac = -1
+
+          if (js /= unp_id) then
+            write(iw,'("Update_rsto_Rij> Error. Something went wrong")')
+            stop
+          end if 
 
           do istep = nt_sparse + jstep, nstep, nt_sparse
             is = state%data(istep, imol)
@@ -90,11 +95,11 @@
             end if
           end do
 
-          if (it_reac == -1) then
-            write(iw,'("Calc_Rij_wo_normalize> ")')
-            write(iw,'("Molecule ", i5, ": No reaction is observed.")') imol
-            cycle 
-          end if
+          !if (it_reac == -1) then
+          !  write(iw,'("Calc_Rij_wo_normalize> ")')
+          !  write(iw,'("Molecule ", i5, ": No reaction is observed.")') imol
+          !  cycle 
+          !end if
 
           do istep = 0, it_reac, nt_sparse
             it_diff              = it_reac - istep
