@@ -16,7 +16,7 @@ module mod_analyze
 
   ! constants
   !
-  real(8), parameter, private :: EPS = 1.0d-8 
+  real(8), parameter, private :: EPS = 1.0d-20 
 
   ! structures
   !
