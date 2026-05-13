@@ -197,15 +197,19 @@
 
       ! Dummy 
       !
-      integer :: istep
-      integer :: is, js
-      real(8) :: val
+      character(len=MaxChar) :: line
+      integer                :: istep
+      integer                :: is, js
+      real(8)                :: val
 
       ! Setup
       !
 
       do while (.true.)
-       read(io,*,end=100) is, js, istep, val
+       read(io,'(a)',end=100) line
+       if (line(1:3) == 'END') go to 100
+       
+       read(line,*) is, js, istep, val
        f%R(istep, is, js) = f%R(istep, is, js) + val
       end do
  100  return 
@@ -378,13 +382,14 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine output_Rij_hist(option, output, f)
+    subroutine output_Rij_hist(option, output, f, is_gen)
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option), intent(in)    :: option
       type(s_output), intent(in)    :: output
-      type(s_func),   intent(inout) :: f 
+      type(s_func),   intent(inout) :: f
+      logical,        intent(inout) :: is_gen 
 
       ! I/O
       !
@@ -426,6 +431,32 @@
       end do 
       end do
       end do 
+      write(io, '("END")')
+
+      close(io)
+
+
+      write(fname, '(a,".krhist")') trim(output%fhead)
+      if (is_gen) then
+        call open_file(fname, io, pos = 'APPEND') 
+      else
+        call open_file(fname, io) 
+      end if
+      is_gen = .true.
+
+      write(io,'("RIJ")')
+
+      do js = 1, nstate
+      do is = 1, nstate
+      do istep = 0, nt_range
+        val = f%R(istep, is, js)
+        if (val >= 0.999d0) then
+          write(io, '(i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, istep, val
+        end if
+      end do 
+      end do
+      end do 
+      write(io, '("END")')
 
       close(io)
 

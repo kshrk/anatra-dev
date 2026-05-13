@@ -140,6 +140,7 @@ def main():
     # =========================
     print("\n[option_param]")
 
+    use_perturbed_traj   = ask_bool        ("use_perturbed_traj",   "whether input files come from perturbed dynamics", False) 
     use_dissociate_state = ask_bool        ("use_dissociate_state", "define dissociate state or not", False)
     use_reflection_state = ask_bool        ("use_reflection_state", "define reflection state or not", False)
     use_product_state    = ask_bool        ("use_product_state",    "define product (absorbing) state or not", False)
@@ -155,8 +156,13 @@ def main():
     dt                   = ask_float       ("dt",                   "Time grid for input CV files", 1.0)
     t_sparse             = ask_float       ("t_sparse",             "Sparse time-grid for computing K-, M-, R-, and P0-functions", 1.0)
     t_range              = ask_float       ("t_range",              "Timescale for K-, M-, R-, and P0-functions", 10.0)
-    t_extend             = ask_float       ("t_extend",             "Extended timescale for P- and Q-functions", 100.0)
-    dt_tcfout            = ask_float       ("dt_tcfout",            "Time grid for outputting P- and Q-functions", 2.0)
+
+    if extrapolate:
+        t_extend         = ask_float       ("t_extend",             "Extended timescale for P- and Q-functions", 100.0)
+        dt_tcfout        = ask_float       ("dt_tcfout",            "Time grid for outputting P- and Q-functions", 2.0)
+
+    if use_perturbed_traj:
+        f_unperturbed_id = input("[list file that contains unperturbed state ID and Rij-flag for each input file]: ").strip() or ""
 
     initial_state_ids = ask_int_list("initial_state_ids", "Initial state IDs")
 
@@ -249,6 +255,7 @@ def main():
 
     # option_param
     items = [
+        ("use_perturbed_traj",   bool_to_fortran(use_perturbed_traj)),
         ("use_dissociate_state", bool_to_fortran(use_dissociate_state)),
         ("use_reflection_state", bool_to_fortran(use_reflection_state)),
         ("use_product_state",    bool_to_fortran(use_product_state)),
@@ -258,21 +265,26 @@ def main():
         ("nstate",               str(nstate)),
         ("ndim",                 str(ndim)),
         ("nmol",                 str(nmol)),
-        ("dt",                   f"{dt}d0"),
-        ("t_sparse",             f"{t_sparse}d0"),
+        ("dt",                   f"{dt}"),
+        ("t_sparse",             f"{t_sparse}"),
         ("t_range",              str(t_range)),
-        ("t_extend",             str(t_extend)),
-        ("dt_tcfout",            f"{dt_tcfout}d0"),
         ("initial_state_ids",    format_int_list(initial_state_ids)),
     ]
 
-    if reflection_state_ids is not None:
+    if use_perturbed_traj:
+        items.append(("f_unperturbed_id",     f'"{f_unperturbed_id}"'))
+
+    if extrapolate:
+        items.append(("t_extend",             str(t_extend)))
+        items.append(("dt_tcfout",            f"{dt_tcfout}"))
+
+    if use_reflection_state:
         items.append(("reflection_state_ids", format_int_list(reflection_state_ids)))
 
-    if dissociate_state_ids is not None:
+    if use_dissociate_state:
         items.append(("dissociate_state_ids", format_int_list(dissociate_state_ids)))
 
-    if product_state_ids is not None:
+    if use_product_state:
         items.append(("product_state_ids", format_int_list(product_state_ids)))
 
     print_aligned_namelist("option_param", items)

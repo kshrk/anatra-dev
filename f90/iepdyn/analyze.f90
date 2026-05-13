@@ -752,13 +752,14 @@ module mod_analyze
       integer                :: nboundary
       logical                :: is_end
       logical                :: sb, vb
+      logical                :: is_gen
 
       type(s_cv)    :: cv
       type(s_state) :: state
 
       ! Dummy
       !
-      integer :: ifile, istep, iseg, is, js, is1, is2, ib, id, idir
+      integer :: ifile, istep, iseg, is, js, is1, is2, ib, id, idir, ierr
 
       ! Arrays
       !
@@ -893,8 +894,9 @@ module mod_analyze
         end do
 
         if (option%output_histogram) then
-          call output_Rij_hist (option, output, f)
-          call output_Kijk_hist(option, output, fwrk)
+          is_gen = .false.
+          call output_Kijk_hist(option, output, fwrk, is_gen)
+          call output_Rij_hist (option, output, f, is_gen)
         end if
 
       else if (option%input_type == InputTypeHISTOGRAM) then
@@ -935,12 +937,13 @@ module mod_analyze
           iseg   = 0
           is_end = .false.
           call open_file(input%fcv(ifile), io, stat = 'old')
-          read(io,'(a)') line
-          if (trim(line) == 'KIJK') then
-            call update_Kijk_from_hist(io, option, fwrk) 
-          else if (trim(line) == 'RIJ') then
-            call update_Rij_from_hist(io, option, f) 
-          end if
+
+          call seek_line(io, 'KIJK', ierr)
+          if (ierr == 0) call update_Kijk_from_hist(io, option, fwrk)
+
+          call seek_line(io, 'RIJ', ierr)
+          if (ierr == 0) call update_Rij_from_hist(io, option, f) 
+            
           close(io)
         end do
         call get_state_connectivity_from_h(option, fwrk%h, b)

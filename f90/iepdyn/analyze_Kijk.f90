@@ -246,6 +246,8 @@
 
       do while (.true.)
         read(io,'(a)',end=100) line
+        if (line(1:3) == 'END') go to 100
+
         read(line,*) typ
         if (trim(typ) == 'H') then
           read(line,*) typ, js, ks, val
@@ -538,13 +540,14 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine output_Kijk_hist(option, output, fwrk)
+    subroutine output_Kijk_hist(option, output, fwrk, is_gen)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_option), intent(in) :: option
-      type(s_output), intent(in) :: output
-      type(s_fwrk),   intent(in) :: fwrk
+      type(s_option), intent(in)    :: option
+      type(s_output), intent(in)    :: output
+      type(s_fwrk),   intent(in)    :: fwrk
+      logical,        intent(inout) :: is_gen
 
       ! I/O
       !
@@ -600,8 +603,47 @@
       end do
       end do 
       end do
+      write(io, '("END")')
 
       close(io)
+
+      write(fname, '(a,".krhist")') trim(output%fhead)
+      if (is_gen) then
+        call open_file(fname, io, pos = 'APPEND') 
+      else
+        call open_file(fname, io) 
+      end if
+      is_gen = .true.
+
+      write(io,'("KIJK")')
+
+      do ks = 1, nstate
+      do js = 1, nstate
+        val = fwrk%h(js, ks)
+        if (val >= 0.999d0) then
+          write(io, '("H", 2x, i5, 2x, i5, 2x, f20.10)') js, ks, val 
+        end if
+      end do
+      end do
+
+      do ks = 1, nstate
+      do js = 1, nstate
+      do is = 1, nstate
+        ik = fwrk%kmesh(is, js, ks)
+        if (ik == 0) cycle
+        do istep = 0, nt_range
+          val = fwrk%K(istep, ik) 
+          if (val >= 0.999d0) then
+            write(io, '("K", 2x, i5, 2x, i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, ks, istep, val
+          end if
+        end do 
+      end do
+      end do 
+      end do
+      write(io, '("END")')
+
+      close(io)
+
 
     end subroutine output_Kijk_hist
 !-----------------------------------------------------------------------
