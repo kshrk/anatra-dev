@@ -33,9 +33,10 @@ module mod_traj
     real(8)                       :: dt
     integer                       :: trajtype_in       = TrajTypeDCD
     integer                       :: trajtype_out      = TrajTypeXTC
-    character(len=MaxChar)        :: molinfo(MaxTraj)  = "molinfo"
     character(len=MaxChar)        :: molinfo_refu      = "molinfo"
     character(len=MaxChar)        :: molinfo_refv      = "molinfo"
+
+    character(len=MaxChar), allocatable :: molinfo(:)
 
     integer                       :: nmolinfo 
   end type s_trajopt
@@ -85,15 +86,19 @@ module mod_traj
       type(s_trajopt),   intent(out) :: trajopt
       integer, optional, intent(in)  :: myrank
 
-      real(8)                      :: dt               = 0.0d0
-      character(len=MaxChar)       :: molinfo(MaxTraj) = ""
-      character(len=MaxChar)       :: molinfo_refu     = ""
-      character(len=MaxChar)       :: molinfo_refv     = ""
+      real(8)                             :: dt               = 0.0d0
+      character(len=MaxChar), allocatable :: molinfo(:)
+      character(len=MaxChar)              :: molinfo_refu     = ""
+      character(len=MaxChar)              :: molinfo_refv     = ""
 
       integer :: i, irank
       integer :: nmolinfo
 
       namelist /trajopt_param/ dt, molinfo, molinfo_refu, molinfo_refv 
+
+
+      allocate(molinfo(1:MaxTraj))
+      allocate(trajopt%molinfo(1:MaxTraj))
 
       molinfo = ""
       rewind iunit

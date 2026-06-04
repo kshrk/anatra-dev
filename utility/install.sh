@@ -1,19 +1,38 @@
 #!/bin/bash
 
-# Usage: ./install.sh <compiler type> ("gcc" or "intel")
+# Usage: ./install.sh --compiler=<compiler type> ("gcc" or "intel")
 #
-compiler=$1   # "intel" or "gcc"
+
+# Variables
 #
+COMPILER=intel
+
+# Parse arguments
+#
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --compiler=*)
+            COMPILER="${1#*=}"
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+
 #=====================================================================
 #
 # ... install ANATRA fortran programs
 #
-if [ "$compiler" == "" ]; then
-  compiler=intel
+if [ "$COMPILER" == "" ]; then
+  COMPILER=intel
   echo "no compiler type is specified"
   echo ">> intel is used for compile"
-elif [ "$compiler" == "gcc" ]||[ "$compiler" == "intel" ]; then
-  echo "$compiler is used"
+elif [ "$COMPILER" == "gcc" ]||[ "$COMPILER" == "intel" ]; then
+  echo "$COMPILER is used"
 fi
 
 list="catcrd"
