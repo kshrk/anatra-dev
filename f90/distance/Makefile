@@ -2,8 +2,8 @@ HOME=.
 LIB=../lib
 XDRLIB=../lib/external/xdr-interface-fortran/xdrfile-1.1.4/lib
 XDRINTERFACE=../lib/external/xdr-interface-fortran
-NCLIB=../lib/external/netcdf/netcdf/lib
-NCINC=../lib/external/netcdf/netcdf/include
+NCLIB=$(realpath ../lib/external/netcdf/netcdf/lib)
+NCINC=$(realpath ../lib/external/netcdf/netcdf/include)
 
 EXEF=distance.x
 TRGT=distance
