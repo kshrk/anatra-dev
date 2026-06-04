@@ -576,6 +576,12 @@ module mod_ctrl
          stop
       end if
 
+      if (calc_Pint .and. calc_Steady) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("Calc_Pint and Calc_Steady can not be used at the same time.")')
+        stop
+      end if
+
       if (use_constant_Qij) then
         if (calc_Pint .or. calc_Steady) then
           write(iw,'("Read_Ctrl_Option> Error.")')

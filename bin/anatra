@@ -23,6 +23,7 @@ anas=("trjconv"             \
       "z_orient"            \
       "rotation"            \
       "cluster_size"        \
+      "free_volume"         \
       "species_info"        \
       "gauqm_prepper")
 
@@ -39,6 +40,7 @@ anas_abbrev=("trj"   \
 	     "zori"  \
 	     "rot"   \
 	     "cls"   \
+	     "fvol"  \
 	     "spec"  \
 	     "gau")
 
@@ -55,6 +57,7 @@ exes=("trj_convert/tr_convert.tcl"           \
       "z_orient/analysis.tcl"                \
       "rotation/analysis.tcl"                \
       "cluster_size/analysis.tcl"            \
+      "free_volume/analysis.tcl"             \
       "species_info/analysis.tcl"            \
       "gauqm_prepper/analysis.tcl")
 
@@ -71,6 +74,7 @@ hlp=("trjconv             (trj)   : Convert trajectory"                  \
      "z_orient            (zori)  : Orientation Analysis along z"        \
      "rotation            (rot)   : Rotation Analysis"                   \
      "cluster_size        (cls)   : Cluster-size Analysis"               \
+     "free_volume         (fvol)  : Free-Volume Analysis"                \
      "species_info        (spec)  : Get Species information"             \
      "gauqm_prepper       (gau)   : Gaussian QM input prepper")
 

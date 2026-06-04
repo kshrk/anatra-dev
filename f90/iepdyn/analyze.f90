@@ -493,7 +493,11 @@ module mod_analyze
 
         ! Calculate steady-state properties
         !
-        write(fname,'(a,".steady.",i4.4)') trim(output%fhead), iblock
+        if (option%calc_Steady) then
+          write(fname,'(a,".steady.",i4.4)') trim(output%fhead), iblock
+        else if (option%calc_Pint) then
+          write(fname,'(a,".int.",i4.4)')    trim(output%fhead), iblock
+        end if
         call reacdyn_pint(output, option, boundary, fs, ipse(iblock), &
                           write_steady = .true., fname_out = fname)
       end do 

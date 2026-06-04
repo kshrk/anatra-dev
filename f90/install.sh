@@ -94,6 +94,7 @@ list="center_of_mass          \
       restricted_radial       \
       potential_of_mean_force \
       interaction_energy      \
+      free_volume             \
       rprate                  \
       state_define            \
       gauqm_prepper"

@@ -168,22 +168,32 @@
         
         ! Integrated values 
         !
-        write(fname,'(a,".int")') trim(output%fhead)
-        call open_file(fname, io)
         psum = 0.0
         do is = 1, nstate
           if (option%is_initial(is)) then
             psum = psum + Pint(is)
           end if
         end do
-        
-        write(io,'("Pint Total  ", e15.7)') psum
-        do is = 1, nstate
-          if (option%is_dissoc(is)) cycle
-          write(io,'("Pint ", i5, 2x, e15.7)') is, Pint(is)
-        end do
-        
-        close(io)
+
+        ws = .true.
+        if (present(write_steady)) then
+          ws = write_steady
+        end if
+
+        if (ws) then
+          write(fname,'(a,".int")') trim(output%fhead)
+          if (present(fname_out)) then
+            write(fname,'(a)') trim(fname_out)
+          end if
+
+          call open_file(fname, io)
+          write(io,'("Pint Total  ", e15.7)') psum
+          do is = 1, nstate
+            if (option%is_dissoc(is)) cycle
+            write(io,'("Pint ", i5, 2x, e15.7)') is, Pint(is)
+          end do
+          close(io)
+        end if
 
       end if
 
