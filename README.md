@@ -67,10 +67,9 @@ This program has been developed with dependencies on several external libraries,
 Each of these libraries is subject to its own license terms as described below.
 
 * **HDF5 (Hierarchical Data Format 5) Software Library and Utilities**  
-    HDF5 (Hierarchical Data Format 5) Software Library and Utilities
     Copyright 2006 by The HDF Group.
 
-    NCSA HDF5 (Hierarchical Data Format 5) Software Library and Utilities
+    NCSA HDF5 (Hierarchical Data Format 5) Software Library and Utilities  
     Copyright 1998-2006 by The Board of Trustees of the University of Illinois.
 
     All rights reserved.
