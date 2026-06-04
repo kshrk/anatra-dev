@@ -66,7 +66,7 @@ along with this program.  If not, see https://www.gnu.org/licenses/.
 This program has been developed with dependencies on several external libraries, which are included in the package.  
 Each of these libraries is subject to its own license terms as described below.
 
-* **HDF5 (Hierarchical Data Format 5) Software Library and Utilities**
+* **HDF5 (Hierarchical Data Format 5) Software Library and Utilities**  
     HDF5 (Hierarchical Data Format 5) Software Library and Utilities
     Copyright 2006 by The HDF Group.
 
