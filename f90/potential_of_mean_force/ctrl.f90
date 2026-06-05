@@ -167,7 +167,7 @@ module mod_ctrl
       real(8) :: del(MaxDim)                = (/1.0d0, 1.0d0, 1.0d0/) 
       real(8) :: origin(MaxDim)             = (/0.0d0, 0.0d0, 0.0d0/)
 
-      real(8) :: temperature                = 298.0d0
+      real(8) :: temperature                = 300.0d0
 
       logical :: use_spline                 = .false.
       integer :: spline_resolution          = 4
