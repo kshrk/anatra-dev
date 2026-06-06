@@ -164,6 +164,7 @@ module mod_ctrl
       option%urange        = urange
 
       allocate(option%react_range(1:2, ndim))
+      allocate(option%bound_range(1:2, ndim))
       allocate(option%state_def(2, ndim, Nstate))
 
       do i = 1, ndim
@@ -171,14 +172,15 @@ module mod_ctrl
         option%bound_range(1:2, i)   = bound_range(1:2, i)
       end do
 
-      do i = 1, ndim
-        option%state_def(1:2, i, 1) = react_range(1:2, i)
-      end do
-
-
+      ! For backward compatibility
+      !
       if (abs(option%bound_range(1, i) - option%bound_range(2, i)) > 1.0d-5) then
         option%react_range = option%bound_range
       end if 
+
+      do i = 1, ndim
+        option%state_def(1:2, i, 1) = option%react_range(1:2, i)
+      end do
 
       !do i = 1, 3
       !  do j = 1, ndim

@@ -169,6 +169,7 @@ list="center_of_mass          \
       extract_frame           \
       random_frame            \
       histogram               \
+      moving_average          \
       average_function        \
       bootstrap_prepper       \
       iepdyn                  \

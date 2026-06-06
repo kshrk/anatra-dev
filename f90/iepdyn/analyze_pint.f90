@@ -187,10 +187,10 @@
           end if
 
           call open_file(fname, io)
-          write(io,'("Pint Total  ", e15.7)') psum
+          write(io,'("Pint InitTotal  ", e15.7)') psum
           do is = 1, nstate
             if (option%is_dissoc(is)) cycle
-            write(io,'("Pint ", i5, 2x, e15.7)') is, Pint(is)
+            write(io,'("Pint ", i9, 2x, e15.7)') is, Pint(is)
           end do
           close(io)
         end if
