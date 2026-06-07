@@ -66,6 +66,8 @@
           end if
         end do
 
+        if (nini == 0) return
+
         ! Generate random numbers
         !
         call get_random_integer(nini, 1, nini, .true., rand(1:nini)) 

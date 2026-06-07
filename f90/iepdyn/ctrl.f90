@@ -593,17 +593,17 @@ module mod_ctrl
 
       if (use_rsto_Rij) then
         if (option%input_type == InputTypeHistogram) then
-          write(iw,'("Read_Ctrl_Option> Warning.")')
-          write(iw,'("use_rsto_Rij = .true. is effective only if input_type = TIMESERIES.")')
-          write(iw,'(">> changed to use_rsto_Rij = .false.")')
+          !write(iw,'("Read_Ctrl_Option> Warning.")')
+          !write(iw,'("use_rsto_Rij = .true. is effective only if input_type = TIMESERIES.")')
+          !write(iw,'(">> changed to use_rsto_Rij = .false.")')
           option%use_rsto_Rij = .false.
         end if
 
-        if (.not. option%use_perturbed_traj) then
-          write(iw,'("Read_Ctrl_Option> Error.")')
-          write(iw,'("use_rsto_Rij = .true. should  be used with use_perturbed_traj = .true.")')
-          stop
-        end if 
+        !if (.not. option%use_perturbed_traj) then
+        !  write(iw,'("Read_Ctrl_Option> Error.")')
+        !  write(iw,'("use_rsto_Rij = .true. should  be used with use_perturbed_traj = .true.")')
+        !  stop
+        !end if 
       end if
 
       ! Memory allocation
