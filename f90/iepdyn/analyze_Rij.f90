@@ -26,11 +26,11 @@
       integer, allocatable :: rand(:)
       
 
-      if (.not. option%use_perturbed_traj) then
-        write(iw,'("Update_Rsto_Rij> Error.")')
-        write(iw,'("use_perturbed_traj should be .true.")')
-        stop
-      end if
+      !if (.not. option%use_perturbed_traj) then
+      !  write(iw,'("Update_Rsto_Rij> Error.")')
+      !  write(iw,'("use_perturbed_traj should be .true.")')
+      !  stop
+      !end if
 
       if (.not. (state%use_for_Rij == -1 .or. state%use_for_Rij == 1)) return
 
@@ -60,7 +60,7 @@
         !
         do jstep = 1, nstep
           js = state%data(jstep, imol)
-          if (js == unp_id .and. option%is_initial(js)) then
+          if ((js == unp_id .or. unp_id == -1) .and. option%is_initial(js)) then
             nini           = nini + 1
             init_set(nini) = jstep 
           end if
@@ -81,7 +81,7 @@
           js      = state%data(jstep, imol)
           it_reac = -1
 
-          if (js /= unp_id) then
+          if (js /= unp_id .and. unp_id /= -1) then
             write(iw,'("Update_rsto_Rij> Error. Something went wrong")')
             stop
           end if 

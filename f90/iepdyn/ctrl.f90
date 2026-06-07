@@ -36,7 +36,7 @@ module mod_ctrl
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
     logical :: use_constant_Qij     = .false.
-    logical :: use_rsto_Rij         = .false.
+    logical :: use_rsto_Rij         = .true.
     logical :: output_histogram     = .false.
     logical :: extrapolate          = .false.
     logical :: calc_Pint            = .false.
@@ -179,7 +179,7 @@ module mod_ctrl
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
       logical :: use_constant_Qij     = .false.
-      logical :: use_rsto_Rij         = .false.
+      logical :: use_rsto_Rij         = .true.
       logical :: output_histogram     = .false.
       logical :: extrapolate          = .false.
       logical :: calc_Pint            = .false.
