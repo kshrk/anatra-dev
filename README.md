@@ -11,7 +11,7 @@ We often need to analyze specific atoms, molecules, or amino acid residues of pr
 
 Creating a program that can interpret and extract such sets defined by intersections and unions of multiple conditions can be quite difficult.
 
-On the other hand, **VMD** (*Visual Molecular Dynamics*), a tool widely used by MD users around the world, offers an excellent feature called **Atomselection** for selecting specific parts of a system. For instance, the above condition can be expressed in VMD$^{\prime}$s Atomselection syntax as:
+On the other hand, **VMD** (*Visual Molecular Dynamics*), a tool widely used by MD users around the world, offers an excellent feature called **Atomselection** for selecting specific parts of a system. For instance, the above condition can be expressed in VMD's Atomselection syntax as:
 
 ```
 resid 11 to 50 and resname ALA and noh
@@ -19,7 +19,7 @@ resid 11 to 50 and resname ALA and noh
 
 which is easy to understand intuitively.
 
-**ANATRA** adopts a design that leverages VMD$^{\prime}$s Atomselection feature. As a result, users can use exactly the same syntax as in Atomselection for selecting specific parts of the system, eliminating the need to learn a new selection language—especially convenient for existing VMD users.
+**ANATRA** adopts a design that leverages VMD's Atomselection feature. As a result, users can use exactly the same syntax as in Atomselection for selecting specific parts of the system, eliminating the need to learn a new selection language—especially convenient for existing VMD users.
 
 **ANATRA** consists of numerous Tcl/Fortran programs tailored to different types of analyses. To manage these programs in a unified way, a command-line interface named `"anatra"` is provided. Users can perform various analyses by executing:
 
@@ -167,3 +167,30 @@ https://github.com/kmtu/xdrfort
 * **mt19937.f**  
     This routine was developed by Makoto Matsumoto and Takuji Nishimura and was distributed under the GNU Library General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.  
 https://www.math.sci.hiroshima-u.ac.jp/m-mat/MT/VERSIONS/FORTRAN/fortran.html
+
+* **FFTE**
+    Copyright(C) 2000-2003 Daisuke Takahashi
+
+    You may use, copy, modify this code for any purpose (include commercial use) and without fee. You may distribute this ORIGINAL package.
+
+    https://www2.ccs.tsukuba.ac.jp/SC/sc2003/Software/FFTE_Package-3.0/doc/index.html 
+
+* **IEPDYN (Integral-Equation formalism of Population DYNamics)**  
+    Copyright 2026 Kento Kasahara
+
+    IEPDYN is distributed under the **GNU General Public License version 2.0 (GPL v2.0)**.  
+    This software is distributed under the GNU GENERAL PUBLIC LICENSE Version 2, June 1991.
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+    
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see https://www.gnu.org/licenses/.
+
+    https://github.com/kenkasa/iepdyn     

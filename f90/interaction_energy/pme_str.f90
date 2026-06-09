@@ -32,6 +32,9 @@ module mod_pme_str
 
     real(8),    allocatable :: qderiv(:, :, :, :)
     real(8),    allocatable :: qderiv_dual(:, :, :, :)
+
+    complex(kind(0d0)), allocatable :: w1(:, :, :), w2(:, :, :)
+
     !real,    allocatable :: dfunc (:, :, :)
     !real,    allocatable :: qfunck(:, :, :)
     !complex, allocatable :: qfuncm(:, :, :)

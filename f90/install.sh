@@ -8,8 +8,11 @@
 # Variables
 #
 INSTALL_HDF5=false
+WITH_OPENBLAS=false
 SKIP_INSTALL_LIB=false
 COMPILER=intel
+
+MATHLIB=""
 
 
 # Parse arguments
@@ -24,6 +27,15 @@ while [[ $# -gt 0 ]]; do
             SKIP_INSTALL_LIB=true
             shift
             ;;
+        --with-openblas)
+            WITH_OPENBLAS=true
+	    if [ "$OPENBLAS_ROOT" == "" ];then
+              echo "Please define OPENBLAS_ROOT variable that indicates the path to openblas directory"
+              exit
+	    fi
+	    MATHLIB=openblas
+            shift
+            ;;
         --compiler=*)
             COMPILER="${1#*=}"
             shift
@@ -35,10 +47,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-#
-#=====================================================================
-#
-# Install XDR Library 
 #
 cwd=`pwd`
 XDRPATH=$ANATRA_PATH/f90/lib/external/xdr-interface-fortran
@@ -61,6 +69,8 @@ if [ "$SKIP_INSTALL_LIB" == "true" ];then
 
 elif [ "$SKIP_INSTALL_LIB" == "false" ];then
 
+  # Install XDR Library 
+  #
   cd $XDRPATH
     if [ ! -e xdrfile-1.1.4 ]; then
       tar xvf xdrfile-1.1.4.tar.gz 
@@ -74,9 +84,11 @@ elif [ "$SKIP_INSTALL_LIB" == "false" ];then
   #
   if [ "$INSTALL_HDF5" == "true" ];then
     cd $HDFPATH
-      if [ ! -e hdf5-hdf5-1_12_3 ];then
-        tar xvf hdf5-hdf5-1_12_3.tar.gz
-      fi
+      if [ -e hdf5-hdf5-1_12_3 ];then
+	rm -rf hdf5-hdf5-1_12_3
+      fi 
+      tar xvf hdf5-hdf5-1_12_3.tar.gz
+
       cd hdf5-hdf5-1_12_3
       if [ "$COMPILER" == "gcc" ];then
         ./configure FC=gfortran CC=gcc --prefix=$HDFPATH
@@ -102,9 +114,11 @@ elif [ "$SKIP_INSTALL_LIB" == "false" ];then
   #
   
   cd $NCPATH
-  if [ ! -e netcdf-4.6.1 ];then
-    tar xvf netcdf-4.6.1.tar.gz
+  if [ -e netcdf-4.6.1 ];then
+    rm -rf netcdf-4.6.1
   fi
+  tar xvf netcdf-4.6.1.tar.gz
+
   cd netcdf-4.6.1
   if [ "$COMPILER" == "gcc" ];then
     ./configure FC=gfortran CC=gcc --prefix=$NCPATH/netcdf
@@ -122,9 +136,10 @@ elif [ "$SKIP_INSTALL_LIB" == "false" ];then
   
   # Install NetCDF-Fortran library
   #
-  if [ ! -e netcdf-fortran-4.4.4 ];then
-    tar xvf netcdf-fortran-4.4.4.tar.gz
+  if [ -e netcdf-fortran-4.4.4 ];then
+    rm -rf netcdf-fortran-4.4.4
   fi
+  tar xvf netcdf-fortran-4.4.4.tar.gz
   cd netcdf-fortran-4.4.4
   export LDFLAGS="$LDFLAGS -L$NCPATH/netcdf/lib"
   export LIBS="-lnetcdf"
@@ -155,6 +170,12 @@ if [ "$COMPILER" == "" ]; then
   echo ">> intel is used for compile"
 elif [ "$COMPILER" == "gcc" ]||[ "$COMPILER" == "intel" ]; then
   echo "$COMPILER is used"
+
+  if [ "$COMPILER" == "gcc" ];then
+    FC=gfortran
+  else
+    FC=$fortcomp 
+  fi
 fi
 
 list="center_of_mass          \
@@ -187,15 +208,19 @@ mkdir -p bin
 for d in $list;do
   echo "o Installing $d ..."
   echo ""
-  if [ "$COMPILER" == "gcc" ]&&[ "$d" == "en_analysis" ]; then
-    echo "Compiler: gcc  Program: en_analysis"
+  if [ "$COMPILER" == "gcc" ]&&[ "$d" == "interaction_energy" ]; then
+    echo "Compiler: gcc  Program: interaction_energy"
     echo ">> Skipped"
     echo ""
     continue
   fi
   cd $d
 
-  make -f Makefile
+  if [ "$MATHLIB" != "" ];then
+    make -f Makefile FC=$FC MATHLIB=$MATHLIB
+  else
+    make -f Makefile FC=$FC 
+  fi 
 
   cd $cwd 
   echo ">> Finished"

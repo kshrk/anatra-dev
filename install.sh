@@ -2,13 +2,16 @@
 
 # Usage: ./install.sh --compiler=<compiler type> ("gcc" or "intel")
 #
-# 1. If you need to install HDF5 library, please add --install-hdf5
-# 2. If you wish to skip library installation, please add --skip-install-lib
+# 1. If you need to install HDF5 library,        please add --install-hdf5
+# 2. If you wish to skip library installation,   please add --skip-install-lib
+# 3. If you wish to use OpenBLAS instead of MKL, please add --with-openblas
+#    OPENBLAS_ROOT (path to openblas directory) variable should be defined prior to installation of ANATRA
 
 # Variables
 #
 INSTALL_HDF5=""
 SKIP_INSTALL_LIB=""
+WITH_OPENBLAS=""
 COMPILER=intel
 
 # Parse arguments
@@ -21,6 +24,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-install-lib)
             SKIP_INSTALL_LIB="--skip-install-lib"
+            shift
+            ;;
+        --with-openblas)
+            WITH_OPENBLAS="--with-openblas"
+	    if [ "$OPENBLAS_ROOT" == "" ];then
+              echo "Please define OPENBLAS_ROOT variable that indicates the path to openblas directory"
+              exit
+	    fi
             shift
             ;;
         --compiler=*)
@@ -107,7 +118,7 @@ echo ""
 cwd=`pwd`
 
 cd f90 
-./install.sh --compiler=$COMPILER $INSTALL_HDF5 $SKIP_INSTALL_LIB
+./install.sh --compiler=$COMPILER $INSTALL_HDF5 $WITH_OPENBLAS $SKIP_INSTALL_LIB
 cd $cwd
 
 cd utility

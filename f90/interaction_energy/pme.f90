@@ -11,7 +11,7 @@ module mod_pme
   use mod_com
   use mod_potential
   use mod_pme_str
-  use mod_fftmkl
+  use mod_fft
   !use mod_fftw3i
 
   ! constants
@@ -277,8 +277,9 @@ module mod_pme
       !
       fftinfo%ng3(1:3) = pmevars(1)%ng3(1:3)
 
-      if (is_first) &
-        call fftmkl_init(fftinfo, pmevar%qfunck, pmevar%qfuncm)
+      if (is_first) then
+        call fft_init(fftinfo, pmevar%qfunck, pmevar%qfuncm)
+      end if
 
       ! generate PME functions 
       !
@@ -448,7 +449,7 @@ module mod_pme
       fftinfo%ng3(1:3) = pmevar%ng3(1:3)
 
       if (is_first) &
-        call fftmkl_init(fftinfo, pmevar%qfunck, pmevar%qfuncm)
+        call fft_init(fftinfo, pmevar%qfunck, pmevar%qfuncm)
 
       ! generate PME functions 
       !
@@ -1073,7 +1074,7 @@ module mod_pme
       implicit none
 
       type(s_option),  intent(in)    :: option
-      type(s_fftinfo), intent(in)    :: fftinfo
+      type(s_fftinfo), intent(inout) :: fftinfo
       type(s_pmevar),  intent(inout) :: pmevar 
 
       integer :: igx, igy, igz, ig, igR, igI
@@ -1088,22 +1089,10 @@ module mod_pme
 
       ! FT: Q(real) => Q(recp)
       !
-
-      !pmevar%qfuncm = 0.0d0
-      call fftmkl_r2c(fftinfo, pmevar%qfunck, pmevar%qfuncm)
-
+      call fft_r2c(fftinfo, pmevar%qfunck, pmevar%qfuncm)
       if (option%pme_dual) then
-        call fftmkl_r2c(fftinfo, pmevar%qfunck_dual, pmevar%qfuncm_dual)
+        call fft_r2c(fftinfo, pmevar%qfunck_dual, pmevar%qfuncm_dual)
       end if
-      !call fftw3i_execute(fftinfo,                                   &
-      !                    FFTW_SignForward,                          &
-      !                    pmevar%qfunck,  &
-      !                    pmevar%qfuncm)
-
-      !call fftw3i_execute(fftinfo,                                   &
-      !                    FFTW_SignForward,                          &
-      !                    pmevar%qfunck(0:ngx-1, 0:ngy-1, 0:ngz-1),  &
-      !                    pmevar%qfuncm(0:ngx/2, 0:ngy-1, 0:ngz-1))
 
       ! G = D * Q
       !
@@ -1119,11 +1108,11 @@ module mod_pme
       ! FT: G(recp) => G(real) 
       !
       pmevar%gfunck = 0.0d0
-      call fftmkl_c2r(fftinfo, pmevar%gfuncm, pmevar%gfunck)
+      call fft_c2r(fftinfo, pmevar%gfuncm, pmevar%gfunck)
 
       pmevar%gfunck_dual = 0.0d0
       if (option%pme_dual) then
-        call fftmkl_c2r(fftinfo, pmevar%gfuncm_dual, pmevar%gfunck_dual)
+        call fft_c2r(fftinfo, pmevar%gfuncm_dual, pmevar%gfunck_dual)
       end if
 
     end subroutine setup_pme_gfunc

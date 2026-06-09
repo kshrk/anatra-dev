@@ -10,7 +10,7 @@
       ! Local
       !
       integer :: nmol, nstep, nt_range, nt_sparse
-      integer :: nini
+      integer :: nini, ninih
       integer :: use_for_Rij
 
       ! Dummy 
@@ -74,7 +74,8 @@
 
         ! Generate histogram
         !
-        do ito = 1, nini * 0.5
+        ninih = nini * 0.5
+        do ito = 1, ninih
           jstep = init_set(rand(ito))
           if (jstep + nt_sparse > nstep) cycle
 

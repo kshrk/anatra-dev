@@ -18,7 +18,7 @@ module mod_analyze
     integer :: nmol
     integer :: nstep
     integer :: unperturbed_id = -1
-    integer :: use_for_Rij    = .true.
+    integer :: use_for_Rij    = -1 
     integer, allocatable :: data(:, :) ! (nstep, nmol)
   end type s_state
 
