@@ -76,7 +76,8 @@ subroutine show_usage
     write(iw,'(" use_product_state      =  .false.       ! define product (absorbing) state or not")')
     write(iw,'(" calc_steady            =  .false.       ! calculate steady-state (equilibrium) populations or not")')
     write(iw,'(" calc_Pint              =  .false.       ! calculate time integral of Pj analytically or not")')
-    write(iw,'(" extrapolate            =  .false.       ! evaluate the time development of Pj(t) based on the integral equations")')
+    write(iw,'(" extrapolate            =  .false.       &
+                 &! evaluate the time development of Pj(t) based on the integral equations")')
     write(iw,'(" nstate                 =  4             ! # of states")')
     write(iw,'(" ndim                   =  1             ! # of dimensions.")')
     write(iw,'(" nmol                   =  1             ! # of target molecules (typically 1)")')

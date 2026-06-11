@@ -109,19 +109,15 @@ module mod_input
       ! Initialize
       !
       ntraj        = 0
-      ftraj        = ''
       flist_traj   = ''
 
       ncv          = 0
-      fcv          = ''
       flist_cv     = ''
 
       nweight      = 0
-      fweight      = ''
       flist_weight = ''
 
       nprof        = 0
-      fprof        = ''
       flist_prof   = ''
 
       fdx          = ''

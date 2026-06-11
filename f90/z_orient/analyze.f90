@@ -164,9 +164,9 @@ module mod_analyze
             ez(3) = 1.0d0
           end if
 
-!$omp parallel private(imol, dlen, zave, cossq), &
-!$omp        & shared(dp, cost, theta, angle),   &
-!$omp        & default(shared),                  &
+!$omp parallel private(imol, dlen, zave, cossq, prod), &
+!$omp        & shared(dp, cost, theta, angle),         &
+!$omp        & default(shared),                        &
 !$omp        & reduction(+:sorder_ave)
 !$omp do
 !
@@ -206,7 +206,6 @@ module mod_analyze
             ! order parameter (3/2) * cos^2 - 1/2  
             !
             cossq = cost(imol) ** 2
-            sorder(imol) = 1.5d0 * cossq - 0.5d0
 
             sorder_ave = sorder_ave + sorder(imol)
 

@@ -446,7 +446,7 @@ module mod_analyze
         end do
         close(UnitOUT)
 
-        if (option%ndim) then
+        if (option%ndim == 2) then
           write(fhead_out,'(a,".boundary")') trim(output%fhead)
           open(UnitOUT, file=trim(fhead_out))
           do ib = 1, voronoi%nbound_points

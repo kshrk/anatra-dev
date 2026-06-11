@@ -1,6 +1,6 @@
 !-------------------------------------------------------------------------------
 !
-!  Module   mod_fftmkl
+!  Module   mod_fft
 !
 !    Module for using MKL-FFT library   
 !
@@ -10,7 +10,7 @@
 
 include 'mkl_dfti.f90'
 
-module mod_fftmkl
+module mod_fft
   use MKL_DFTI 
 
   ! constants
@@ -32,35 +32,23 @@ module mod_fftmkl
 
   ! subroutines
   !
-  public :: fftmkl_init
-  public :: fftmkl_r2c
-  public :: fftmkl_c2r
+  public :: fft_init
+  public :: fft_r2c
+  public :: fft_c2r
 
   contains
 !-----------------------------------------------------------------------
-      subroutine fftmkl_init(fftinfo, funck, funcm)
+      subroutine fft_init(fftinfo, funck, funcm)
 !-----------------------------------------------------------------------
       implicit none
 !
       type(s_fftinfo),     intent(inout) :: fftinfo
-      !real,                intent(inout) :: funck(0:fftinfo%ng3(1)-1,&
-      !                                            0:fftinfo%ng3(2)-1,&
-      !                                            0:fftinfo%ng3(3)-1)
-      !complex,             intent(inout) :: funcm(0:fftinfo%ng3(1)/2,&
-      !                                            0:fftinfo%ng3(2)-1,&
-      !                                            0:fftinfo%ng3(3)-1)
       real(8),             intent(inout) :: funck(fftinfo%ng3(1),       &
                                                   fftinfo%ng3(2),       &
                                                   fftinfo%ng3(3))
-      !real,                intent(inout) :: funck(fftinfo%ng3(1),       &
-      !                                            fftinfo%ng3(2),       &
-      !                                            fftinfo%ng3(3))
       complex(kind(0d0)),  intent(inout) :: funcm(fftinfo%ng3(1)/2 + 1, &
                                                   fftinfo%ng3(2),       &
                                                   fftinfo%ng3(3))
-      !complex,             intent(inout) :: funcm(fftinfo%ng3(1)/2 + 1, &
-      !                                            fftinfo%ng3(2),       &
-      !                                            fftinfo%ng3(3))
 
       integer :: igx, igy, igz, igr, igk
       integer :: ngx, ngy, ngz, ngr, ngk
@@ -89,11 +77,6 @@ module mod_fftmkl
                                    DFTI_REAL,             &
                                    3,                     &
                                    fftinfo%ng3)
-      !statf = DftiCreateDescriptor(fftinfo%desc_forward,  &
-      !                             DFTI_SINGLE,           &
-      !                             DFTI_REAL,             &
-      !                             3,                     &
-      !                             fftinfo%ng3)
 
       statf = DftiSetValue(fftinfo%desc_forward,          &
                            DFTI_PLACEMENT,                &
@@ -120,11 +103,6 @@ module mod_fftmkl
                                    DFTI_REAL,             &
                                    3,                     &
                                    fftinfo%ng3)
-      !statb = DftiCreateDescriptor(fftinfo%desc_backward, &
-      !                             DFTI_SINGLE,           &
-      !                             DFTI_REAL,             &
-      !                             3,                     &
-      !                             fftinfo%ng3)
 
       statb = DftiSetValue(fftinfo%desc_backward,         &
                            DFTI_PLACEMENT,                &
@@ -144,11 +122,11 @@ module mod_fftmkl
 
       statb = DftiCommitDescriptor(fftinfo%desc_backward)
 
-      end subroutine fftmkl_init
+      end subroutine fft_init
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine fftmkl_r2c(fftinfo, in, out)
+    subroutine fft_r2c(fftinfo, in, out)
 !-----------------------------------------------------------------------
       use MKL_DFTI 
       implicit none 
@@ -158,19 +136,14 @@ module mod_fftmkl
       complex(kind(0d0)),  intent(out) :: out(*)
 
       integer :: stat
-      integer :: ng
 
       stat = DftiComputeForward(fftinfo%desc_forward, in, out)
 
-      !ng = (fftsize(1) / 2 + 1) * fftsize(2) * fftsize(3) 
-      !out(1:ng) = out(1:ng) &
-      !            / dble(fftsize(1) * fftsize(2) * fftsize(3))
-
-      end subroutine fftmkl_r2c
+      end subroutine fft_r2c
 !----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine fftmkl_c2r(fftinfo, in, out)
+    subroutine fft_c2r(fftinfo, in, out)
 !-----------------------------------------------------------------------
       use MKL_DFTI 
       implicit none 
@@ -183,11 +156,11 @@ module mod_fftmkl
 
       stat = DftiComputeBackward(fftinfo%desc_backward, in, out) 
 !
-      end subroutine fftmkl_c2r
+      end subroutine fft_c2r
 !----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine fftmkl_cleanup(fftinfo)
+    subroutine fft_cleanup(fftinfo)
 !-----------------------------------------------------------------------
       implicit none 
 
@@ -198,7 +171,7 @@ module mod_fftmkl
       stat = DftiFreeDescriptor(fftinfo%desc_forward)
       stat = DftiFreeDescriptor(fftinfo%desc_backward)
 !
-      end subroutine fftmkl_cleanup
+      end subroutine fft_cleanup
 !----------------------------------------------------------------------
 
-end module mod_fftmkl
+end module mod_fft

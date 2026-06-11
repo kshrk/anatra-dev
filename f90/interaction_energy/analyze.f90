@@ -14,7 +14,8 @@ module mod_analyze
   use mod_potential
   use mod_pme_str
   use mod_pme
-  use mod_fftmkl
+  !use mod_fft
+  use mod_fft
   !use mod_fftw3i
 
   ! constants
@@ -303,7 +304,7 @@ module mod_analyze
         istep  = 0
         do while (.not. is_end)
           istep     = istep     + 1
-          istep_tot = istep_tot + 1 
+          istep_tot = istep_tot + 1
 
           call read_trajfile_oneframe(trajtype, iunit, istep, dcd, xtc, nc, is_end)
 

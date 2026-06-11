@@ -17,6 +17,7 @@ module mod_const
   !
   integer, parameter :: MaxChar     = 1000
   integer, parameter :: MaxTraj     = 500000
+  integer, parameter :: MaxMolInfo  = 50
   integer, parameter :: ir          = 5, iw = 6
   integer, parameter :: UnitIN      = 10
   integer, parameter :: UnitOUT     = 20

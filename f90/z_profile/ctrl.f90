@@ -24,7 +24,7 @@ module mod_ctrl
     real(8) :: dz         = 0.1d0
     integer :: mode(2)    = (/CoMModeRESIDUE, CoMModeRESIDUE/)
     integer :: denstype   = DensityTypeNUMBER
-    integer :: symmetrize = .false. 
+    logical :: symmetrize = .false. 
   end type s_option
 
   ! subroutines
