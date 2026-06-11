@@ -1,4 +1,4 @@
-# ANATRA 1.0.2
+# ANATRA 1.1.0
 
 [Manual (English)](./docs/anatra_manual_en.pdf)  
 [Manual (Japanese)](./docs/anatra_manual_jpn.pdf)
