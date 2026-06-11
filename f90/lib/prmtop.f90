@@ -384,7 +384,7 @@ module mod_prmtop
       integer                :: i, j, k
       integer                :: il, ires, nl
       integer                :: ierr, icol, ncol
-      integer                :: col(ncolmax+1) 
+      real(8)                :: col(ncolmax+1) 
       character(len=MaxChar) :: line
 
 

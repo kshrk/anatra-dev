@@ -177,15 +177,15 @@ else ifeq ($(FC),gfortran)
 else
         ifeq ($(chk_ifort),1)
                 FC = ifort
-                #FFLAGS += -qopenmp
+                FFLAGS += -qopenmp
 
         else ifeq ($(chk_ifx),1)
                 FC = ifx
-                #FFLAGS += -qopenmp
+                FFLAGS += -qopenmp
 
         else ifeq ($(chk_gfort),1)
                 FC = gfortran
-                #FFLAGS += -fopenmp
+                FFLAGS += -fopenmp
 
         else
                 $(error No Fortran compiler found)

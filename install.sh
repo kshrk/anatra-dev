@@ -3,16 +3,19 @@
 # Usage: ./install.sh --compiler=<compiler type> ("gcc" or "intel")
 #
 # 1. If you need to install HDF5 library,        please add --install-hdf5
-# 2. If you wish to skip library installation,   please add --skip-install-lib
-# 3. If you wish to use OpenBLAS instead of MKL, please add --with-openblas
-#    OPENBLAS_ROOT (path to openblas directory) variable should be defined prior to installation of ANATRA
+# 2. If you want to skip library installation,   please add --skip-install-lib
+# 3. If you want to use OpenBLAS instead of MKL, please add --with-openblas
+#    OPENBLAS_ROOT (path to OpenBlas directory that contains "lib" directory) 
+#    global variable should be defined prior to installation of ANATRA
+# 4. If you want to use FFTE library instead of FFT in MKL, plese add --with-ffte 
 
 # Variables
 #
-INSTALL_HDF5=""
-SKIP_INSTALL_LIB=""
-WITH_OPENBLAS=""
 COMPILER=intel
+INSTALL_HDF5=""
+WITH_OPENBLAS=""
+WITH_FFTE=""
+SKIP_INSTALL_LIB=""
 
 # Parse arguments
 #
@@ -34,6 +37,10 @@ while [[ $# -gt 0 ]]; do
 	    fi
             shift
             ;;
+        --with-ffte)
+            WITH_FFTE="--with-ffte"
+            shift
+            ;;
         --compiler=*)
             COMPILER="${1#*=}"
             shift
@@ -44,6 +51,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [ "$WITH_OPENBLAS" == "--with-openblas" ]&&[ ];then
+  WITH_FFTE="--with-ffte" 
+fi	
 
 #
 #=====================================================================
@@ -118,7 +129,7 @@ echo ""
 cwd=`pwd`
 
 cd f90 
-./install.sh --compiler=$COMPILER $INSTALL_HDF5 $WITH_OPENBLAS $SKIP_INSTALL_LIB
+./install.sh --compiler=$COMPILER $INSTALL_HDF5 $WITH_OPENBLAS $WITH_FFTE $SKIP_INSTALL_LIB
 cd $cwd
 
 cd utility
