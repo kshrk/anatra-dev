@@ -1,7 +1,7 @@
 # ANATRA 1.1.0
 
-[Manual (English)](./docs/anatra_manual_en.pdf)  
-[Manual (Japanese)](./docs/anatra_manual_jpn.pdf)
+[Manual (English)](https://kenkasa.github.io/anatra-docs-en/)  
+[Manual (Japanese)](https://kenkasa.github.io/anatra-docs-jpn/)
 
 **ANATRA** (*Ana*lyze *Tra*jectories) is a collection of Tcl/Fortran90 programs for analyzing trajectories obtained from Molecular Dynamics (MD) simulations.
 
@@ -40,7 +40,8 @@ At the same time, since the Fortran programs themselves do not implement Atomsel
     * Yuya Matsubara (Graduate School of Engineering Science, Univ. of Osaka)
     * Yusei Maruyama (Graduate School of Engineering Science, Univ. of Osaka)
     * Ryo Okabe (Graduate School of Engineering Science, Univ. of Osaka)
-    * Yuki Yamashita (Graduate School of Engineering Science, Univ. of Osaka)
+    * Yuuki Yamashita (Graduate School of Engineering Science, Univ. of Osaka)
+    * Shuto Saeki (Graduate School of Engineering Science, Univ. of Osaka)
     * Nobuyuki Matubayasi (Graduate School of Engineering Science, Univ. of Osaka) 
 
 ---
