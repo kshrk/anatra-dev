@@ -110,4 +110,4 @@ else
   ana=$ANATRA_PATH/tcl/${exes[$ichk]}
 fi
 
-vmd -dispdev text -e $ana -args $args
+vmd -dispdev text -e $ana -args $args -eofexit < /dev/null
