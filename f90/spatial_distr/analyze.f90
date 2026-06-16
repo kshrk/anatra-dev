@@ -50,8 +50,8 @@ module mod_analyze
 
       ! I/O
       !
-      integer                :: io
-      character(len=MaxChar) :: fname 
+      integer                :: io, io_com
+      character(len=MaxChar) :: fname, fname_com 
 
       ! Local
       !
@@ -164,6 +164,11 @@ module mod_analyze
       istep_tot       = 0
       weight_sum      = 0.0d0
       weight_sum_reac = 0.0d0
+
+      if (option%out_com) then
+        write(fname_com, '(a,".com")') trim(output%fhead)
+        call open_file(fname_com, io_com)
+      end if
 
       do itraj = 1, input%ntraj
 
@@ -280,6 +285,18 @@ module mod_analyze
                            charge)
 
           boxave(:) = boxave(:) + traj(1)%box(:, 1)
+
+          ! Output CoM coordiante (if out_com = .true.)
+          !
+          if (option%out_com) then
+            write(io_com, '(i10)', advance = 'no') istep_tot
+            do imol = 1, nmol
+              write(io_com, '(3(e15.7,2x))', advance = 'no') &
+                 (com%coord(ixyz, imol, 1), ixyz = 1, 3)
+            end do
+            write(io_com,*)
+          end if
+
         end do
 
         istep_tot = istep_tot - 1
@@ -287,6 +304,8 @@ module mod_analyze
         call close_trajfile(trajtype, io, dcd, xtc, nc)
 
       end do
+
+      if (option%out_com) close(io_com)
 
       ! Determine normalization const.
       !

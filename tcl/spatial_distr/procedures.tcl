@@ -90,6 +90,7 @@ proc define_optinfo {} {
   set opt(ng3)               "50 50 50" 
   set opt(del)               "0.5 0.5 0.5" 
   set opt(origin)            "0.0 0.0 0.0"
+  set opt(out_com)           false
   set opt(use_pbcwrap)       false
   set opt(centertype)        "ZERO"
   set opt(use_weight)        false 
@@ -131,6 +132,8 @@ proc read_optinfo {arglist} {
       "-origin"                   "value" $opt(origin)]
 
   # Hidden options
+  set opt(out_com)              [parse_arguments $arglist \
+      "-out_com"                  "value" $opt(out_com)]
   set opt(use_pbcwrap)          [parse_arguments $arglist \
       "-use_pbcwrap"              "value" $opt(use_pbcwrap)]
   set opt(centertype)           [parse_arguments $arglist \
@@ -187,6 +190,10 @@ proc show_optinfo {} {
   puts "ng3               = $opt(ng3)"
   puts "del               = $opt(del)"
   puts "origin            = $opt(origin)"
+
+  if {$opt(out_com)} {
+    puts "out_com           = $opt(out_com)"
+  }
 
   if {$opt(use_pbcwrap)} {
     puts "use_pbcwrap       = $opt(use_pbcwrap)"
@@ -356,6 +363,7 @@ proc analyze {} {
   puts $f "   ng3               = $opt(ng3)"
   puts $f "   del               = $opt(del)"
   puts $f "   origin            = $opt(origin)"
+  puts $f "   out_com           = .$opt(out_com)."
   puts $f "   use_pbcwrap       = .$opt(use_pbcwrap)."
   puts $f "   centertype        = \"$opt(centertype)\""
   puts $f "   use_weight        = .$opt(use_weight)."

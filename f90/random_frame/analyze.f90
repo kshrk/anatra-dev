@@ -51,7 +51,7 @@ module mod_analyze
 
       ! Arrays
       !
-      integer, allocatable :: rand(:), used_snap(:) 
+      integer, allocatable :: rand(:), used_snap(:), orig_order(:) 
 
 
       write(iw,'("Analyze> Start the extraction")')
@@ -83,7 +83,7 @@ module mod_analyze
 
       ! memory allocation
       !
-      allocate(rand(next), used_snap(nstep))
+      allocate(rand(next), used_snap(nstep), orig_order(next))
 
       ! Generate random seed
       !
@@ -94,22 +94,24 @@ module mod_analyze
       !
       if (.not. option%use_allsnap) then
         call get_random_integer(option%nsample, 1, nstep, option%duplicate, rand)
-        call heapsort_integer(rand)
+        call heapsort_integer(rand, orig_order)
 
       ! Extract all snapshots
       !
       else
         do istep = 1, nstep
-          rand(istep) = istep 
+          rand(istep)       = istep
+          orig_order(istep) = istep 
         end do
       end if
 
       write(iw,*)
       write(iw,'("Analyze> Selected snapshots")')
       do i = 1, next 
-        write(iw,'(i8)', advance="no") rand(i)
-        if (mod(i,10) == 0) &
-          write(iw,*)
+        write(iw,'(2i8)') rand(i), orig_order(i)
+        !write(iw,'(i8)', advance="no") rand(i)
+        !if (mod(i,10) == 0) &
+        !  write(iw,*)
       end do
 
       used_snap = 0
@@ -121,9 +123,9 @@ module mod_analyze
       if (trajtype_in == TrajTypeDCD) then
 
         if (trajtype_out == TrajTypeDCD) then
-          call dcd2dcd(input, output, option, rand, used_snap) 
+          call dcd2dcd(input, output, option, rand, used_snap, orig_order) 
         else if (trajtype_out == TrajTypeXTC) then
-          call dcd2xtc(input, output, option, rand, used_snap)
+          call dcd2xtc(input, output, option, rand, used_snap, orig_order)
         end if
 
       else if (trajtype_in == TrajTypeXTC) then
@@ -133,7 +135,7 @@ module mod_analyze
           write(iw,'("Analyze> Error.")')
           write(iw,'("Sorry, XTC => DCD convert is not supported.")')
         else if (trajtype_out == TrajTypeXTC) then
-          call xtc2xtc(input, output, option, rand, used_snap)
+          call xtc2xtc(input, output, option, rand, used_snap, orig_order)
         end if
 
       else if (trajtype_in == TrajTypeNCD) then
@@ -144,7 +146,7 @@ module mod_analyze
           write(iw,'("Analyze> Error.")')
           write(iw,'("Sorry, NetCDF => XTC convert is not supported.")')
         else if (trajtype_out == TrajTypeNCD) then
-          call netcdf2netcdf(input, output, option, rand, used_snap)
+          call netcdf2netcdf(input, output, option, rand, used_snap, orig_order)
         end if
 
       end if 
@@ -273,7 +275,7 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine dcd2dcd(input, output, option, rand, used_snap)
+    subroutine dcd2dcd(input, output, option, rand, used_snap, orig_order)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -282,6 +284,7 @@ module mod_analyze
       type(s_option),  intent(in) :: option
       integer,         intent(in) :: rand(:)
       integer,         intent(in) :: used_snap(:)
+      integer,         intent(in) :: orig_order(:)
 
       type(s_dcd) :: dcd_in, dcd_out
 
@@ -353,7 +356,7 @@ module mod_analyze
               call write_dcd_oneframe(io_o, 1, dcd_out)
 
               if (option%out_rst7) then
-                write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), iwrite
+                write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), orig_order(iwrite)
                 call write_inpcrd(finpcrd, dcd_out%coord(1:3, 1:natm, 1), dcd_out%box(1:3, 1))
               end if
             end do
@@ -372,7 +375,7 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine dcd2xtc(input, output, option, rand, used_snap)
+    subroutine dcd2xtc(input, output, option, rand, used_snap, orig_order)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -381,6 +384,7 @@ module mod_analyze
       type(s_option),  intent(in) :: option
       integer,         intent(in) :: rand(:)
       integer,         intent(in) :: used_snap(:)
+      integer,         intent(in) :: orig_order(:)
 
       real(8), parameter :: ang2nm = 0.1d0
 
@@ -463,7 +467,7 @@ module mod_analyze
                                    real(1000.0d0))
 
                 if (option%out_rst7) then
-                  write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), iwrite
+                  write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), orig_order(iwrite)
                   call write_inpcrd(finpcrd,                      &
                                     dcd_in%coord(1:3, 1:natm, 1), & 
                                     dcd_in%box(1:3, 1))
@@ -484,7 +488,7 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine xtc2xtc(input, output, option, rand, used_snap) 
+    subroutine xtc2xtc(input, output, option, rand, used_snap, orig_order) 
 !-----------------------------------------------------------------------
       implicit none
 
@@ -493,6 +497,7 @@ module mod_analyze
       type(s_option),  intent(in) :: option
       integer,         intent(in) :: rand(:)
       integer,         intent(in) :: used_snap(:)
+      integer,         intent(in) :: orig_order(:)
 
       type(xtcfile) :: xtc_in, xtc_out
 
@@ -571,7 +576,7 @@ module mod_analyze
                                  xtc_in%prec)
 
               if (option%out_rst7) then
-                write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), iwrite
+                write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), orig_order(iwrite)
                 call write_inpcrd(finpcrd, coord, box)
               end if
             end do
@@ -591,7 +596,7 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine netcdf2netcdf(input, output, option, rand, used_snap)
+    subroutine netcdf2netcdf(input, output, option, rand, used_snap, orig_order)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -600,6 +605,7 @@ module mod_analyze
       type(s_option),  intent(in) :: option
       integer,         intent(in) :: rand(:)
       integer,         intent(in) :: used_snap(:)
+      integer,         intent(in) :: orig_order(:)
 
       type(s_netcdf) :: nc_in
 
@@ -710,7 +716,7 @@ module mod_analyze
               retval =  nf90_put_var(io_o, var_angle,  nc_in%angle(1:3, 1),         start = start_box, count = count_box)
 
               if (option%out_rst7) then
-                write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), iwrite
+                write(finpcrd,'(a,i5.5,".inpcrd")') trim(output%fhead), orig_order(iwrite)
                 call write_inpcrd(finpcrd, nc_in%coord(1:3, 1:natm, 1), nc_in%box(1:3, 1))
               end if
             end do
@@ -1027,21 +1033,27 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine heapsort_integer(arr)
+    subroutine heapsort_integer(arr, orig_order)
 !-----------------------------------------------------------------------
       implicit none
 
       integer, intent(inout) :: arr(:)
+      integer, intent(out)   :: orig_order(:)
 
       integer :: i, j, k, l
       integer :: tmp
+      integer :: tmp_order
       integer :: n
-
 
       n = size(arr)
 
-      if (n <= 1) &
-        return
+      if (size(orig_order) /= n) stop "heapsort_integer: size mismatch"
+
+      do i = 1, n
+        orig_order(i) = i
+      end do
+
+      if (n <= 1) return
 
       l = n / 2 + 1
       k = n
@@ -1049,15 +1061,24 @@ module mod_analyze
       do while (k /= 1)
 
         if (l > 1) then
-          l   = l - 1
-          tmp = arr(l) 
+
+          l         = l - 1
+          tmp       = arr(l)
+          tmp_order = orig_order(l)
+
         else
-          tmp      = arr(k)
-          arr(k) = arr(l)
-          k        = k - 1
+
+          tmp       = arr(k)
+          tmp_order = orig_order(k)
+
+          arr(k)        = arr(l)
+          orig_order(k) = orig_order(l)
+
+          k = k - 1
 
           if (k == 1) then
-            arr(l) = tmp
+            arr(l)        = tmp
+            orig_order(l) = tmp_order
             exit
           end if
 
@@ -1067,27 +1088,97 @@ module mod_analyze
         j = l + l
 
         do while (j <= k)
+
           if (j < k) then
-            if (arr(j) < arr(j+1)) &
-              j = j + 1
+            if (arr(j) < arr(j+1)) j = j + 1
           end if
 
           if (tmp < arr(j)) then
-            arr(i) = arr(j)
-            i      = j
-            j      = j + j
+
+            arr(i)        = arr(j)
+            orig_order(i) = orig_order(j)
+
+            i = j
+            j = j + j
+
           else
-            j      = k + 1
+
+            j = k + 1
+
           end if
+
         end do
 
-        arr(i) = tmp
+        arr(i)        = tmp
+        orig_order(i) = tmp_order
 
       end do
-      
 
     end subroutine heapsort_integer
 !-----------------------------------------------------------------------
+
+!!-----------------------------------------------------------------------
+!    subroutine heapsort_integer(arr)
+!!-----------------------------------------------------------------------
+!      implicit none
+!
+!      integer, intent(inout) :: arr(:)
+!
+!      integer :: i, j, k, l
+!      integer :: tmp
+!      integer :: n
+!
+!
+!      n = size(arr)
+!
+!      if (n <= 1) &
+!        return
+!
+!      l = n / 2 + 1
+!      k = n
+!
+!      do while (k /= 1)
+!
+!        if (l > 1) then
+!          l   = l - 1
+!          tmp = arr(l) 
+!        else
+!          tmp      = arr(k)
+!          arr(k) = arr(l)
+!          k        = k - 1
+!
+!          if (k == 1) then
+!            arr(l) = tmp
+!            exit
+!          end if
+!
+!        end if
+!
+!        i = l
+!        j = l + l
+!
+!        do while (j <= k)
+!          if (j < k) then
+!            if (arr(j) < arr(j+1)) &
+!              j = j + 1
+!          end if
+!
+!          if (tmp < arr(j)) then
+!            arr(i) = arr(j)
+!            i      = j
+!            j      = j + j
+!          else
+!            j      = k + 1
+!          end if
+!        end do
+!
+!        arr(i) = tmp
+!
+!      end do
+!      
+!
+!    end subroutine heapsort_integer
+!!-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
     subroutine shuffle_fisher_yates(ind)
