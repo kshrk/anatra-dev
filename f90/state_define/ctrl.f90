@@ -22,9 +22,12 @@ module mod_ctrl
 
     ! use voronoi tessellation (ugly implementation) 
     logical :: use_voronoi            = .true.
+    logical :: use_prog_restr         = .false.
     integer :: vr_ncell               = 5
     real(8) :: vr_normvec(3)          = (/1.0d0, 1.0d0, 1.0d0/)
-    real(8), allocatable :: vr_cellpos(:, :)
+    real(8), allocatable :: vr_cellpos   (:, :)
+    real(8), allocatable :: vr_prog_range(:, :)
+    integer, allocatable :: merge_ids    (:)
 
     ! use grid information
     logical :: use_grids              = .false.
@@ -77,29 +80,35 @@ module mod_ctrl
       integer,        intent(in)  :: iunit
       type(s_option), intent(out) :: option 
 
-      integer :: ndim                    = 2
-      integer :: xyzcol(MaxDim)          = (/1, 2, 3/)
+      integer :: ndim                      = 2
+      integer :: xyzcol(MaxDim)            = (/1, 2, 3/)
       ! voronoi
-      logical :: use_voronoi             = .true.
-      integer :: vr_ncell                = 0
-      real(8) :: vr_normvec(3)           = 1.0d0
-      real(8) :: vr_cellpos(3*MaxNcell)  = 0.0d0
+      logical :: use_voronoi               = .true.
+      logical :: use_prog_restr            = .false.
+      integer :: vr_ncell                  = 0
+      real(8) :: vr_normvec(3)             = 1.0d0
+      real(8) :: vr_cellpos(3*MaxNcell)    = 0.0d0
+      real(8) :: vr_prog_range(3*MaxNcell) = 0.0d0
+      integer :: merge_ids(MaxNcell)       = 0 
       ! use_grids
-      logical :: use_grids               = .false.
-      logical :: pbc                     = .false.
-      real(8) :: box(3)                  = 0.0d0
+      logical :: use_grids                 = .false.
+      logical :: pbc                       = .false.
+      real(8) :: box(3)                    = 0.0d0
 
       integer :: i, j, k 
 
 
-      namelist /option_param/ ndim,        &
-                              xyzcol,      &
-                              use_voronoi, &
-                              vr_ncell,    &
-                              vr_normvec,  &
-                              vr_cellpos,  &
-                              use_grids,   &
-                              pbc,         &
+      namelist /option_param/ ndim,           &
+                              xyzcol,         &
+                              use_voronoi,    &
+                              use_prog_restr, &
+                              vr_ncell,       &
+                              vr_normvec,     &
+                              vr_cellpos,     &
+                              vr_prog_range,  &
+                              merge_ids,      &
+                              use_grids,      &
+                              pbc,            &
                               box
 
       rewind iunit
@@ -112,6 +121,7 @@ module mod_ctrl
 
       write(iw,'("use_voronoi       = ", a)')               get_tof(use_voronoi)
       if (use_voronoi) then
+        write(iw,'("use_prog_restr    = ", a)')             get_tof(use_prog_restr)
         write(iw,'("vr_ncell          = ", i0)')            vr_ncell
         write(iw,'("vr_normvec        = ", 3(f15.7,2x))')   (vr_normvec(i),    i = 1, ndim)
 
@@ -122,7 +132,30 @@ module mod_ctrl
           j = j + ndim
         end do
         write(iw,*)
+
+        if (use_prog_restr) then
+          write(iw,'("vr_prog_range : ")')
+          j = 0
+          do i = 1, vr_ncell
+            write(iw,'(i3,2f20.10)') i, (vr_prog_range(j + k), k = 1, 2)
+            j = j + 2 
+          end do
+          write(iw,*)
+        end if
+
+        if (merge_ids(1) /= -1) then
+          write(iw,'("merge_ids : ")')
+          do i = 1, vr_ncell
+            write(iw,'(i5, " : ", i5)') i, merge_ids(i)
+          end do
+        else
+          do i = 1, vr_ncell
+            merge_ids(i) = i
+          end do
+        end if 
       end if
+
+
       write(iw,'("use_grids         = ", a)')               get_tof(use_grids)
       write(iw,'("pbc               = ", a)')               get_tof(pbc)
       write(iw,'("box               = ", 3(f15.7))')        box(1:3) 
@@ -131,6 +164,12 @@ module mod_ctrl
       !
       if (use_voronoi) then
         allocate(option%vr_cellpos(ndim, vr_ncell))
+
+        if (use_prog_restr) then
+          allocate(option%vr_prog_range(2, vr_ncell))
+        end if
+
+        allocate(option%merge_ids(vr_ncell))
       end if
 
       ! setup option variables
@@ -146,6 +185,7 @@ module mod_ctrl
       option%box                         = box
 
       if (use_voronoi) then
+        option%use_prog_restr              = use_prog_restr
         option%vr_ncell                    = vr_ncell
         option%vr_normvec                  = vr_normvec
 
@@ -156,6 +196,19 @@ module mod_ctrl
             option%vr_cellpos(j, i) = vr_cellpos(k)
           end do
         end do
+
+        if (use_prog_restr) then
+          k = 0
+          do i = 1, vr_ncell
+            do j = 1, 2
+              k = k + 1
+              option%vr_prog_range(j, i) = vr_prog_range(k)
+            end do
+          end do
+        end if
+
+        option%merge_ids(1:vr_ncell) = merge_ids(1:vr_ncell)
+
         !option%vr_cellpos(1:3, 1:vr_ncell) = vr_cellpos(1:3, 1:vr_ncell)
       end if
       

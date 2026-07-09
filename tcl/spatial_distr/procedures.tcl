@@ -91,6 +91,7 @@ proc define_optinfo {} {
   set opt(del)               "0.5 0.5 0.5" 
   set opt(origin)            "0.0 0.0 0.0"
   set opt(out_com)           false
+  set opt(calc_sdf)          true 
   set opt(use_pbcwrap)       false
   set opt(centertype)        "ZERO"
   set opt(use_weight)        false 
@@ -132,6 +133,8 @@ proc read_optinfo {arglist} {
       "-origin"                   "value" $opt(origin)]
 
   # Hidden options
+  set opt(calc_sdf)             [parse_arguments $arglist \
+      "-calc_sdf"                 "value" $opt(calc_sdf)]
   set opt(out_com)              [parse_arguments $arglist \
       "-out_com"                  "value" $opt(out_com)]
   set opt(use_pbcwrap)          [parse_arguments $arglist \
@@ -190,6 +193,10 @@ proc show_optinfo {} {
   puts "ng3               = $opt(ng3)"
   puts "del               = $opt(del)"
   puts "origin            = $opt(origin)"
+
+  if {$opt(calc_sdf)} {
+    puts "calc_sdf          = $opt(calc_sdf)"
+  }
 
   if {$opt(out_com)} {
     puts "out_com           = $opt(out_com)"
@@ -315,7 +322,9 @@ proc analyze {} {
     }
     close $f
   }
-  
+ 
+  set refxyz ""
+
   if {$opt(fit)} {
     puts ""
     puts "--------------------"
@@ -349,6 +358,7 @@ proc analyze {} {
   puts $f "   flist_cv     = \"$opt(flist_cv)\""
   puts $f "   fweight      = \"$opt(fweight)\""
   puts $f "   flist_weight = \"$opt(flist_weight)\""
+  puts $f "   fxyz         = \"$refxyz\""
   puts $f " /"
   puts $f " &output_param"
   puts $f "   fhead     = \"$opt(fhead)\""
@@ -363,6 +373,7 @@ proc analyze {} {
   puts $f "   ng3               = $opt(ng3)"
   puts $f "   del               = $opt(del)"
   puts $f "   origin            = $opt(origin)"
+  puts $f "   calc_sdf          = .$opt(calc_sdf)."
   puts $f "   out_com           = .$opt(out_com)."
   puts $f "   use_pbcwrap       = .$opt(use_pbcwrap)."
   puts $f "   centertype        = \"$opt(centertype)\""

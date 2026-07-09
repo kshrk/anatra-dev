@@ -217,7 +217,7 @@ module mod_cv
 
       integer                :: istep, jstep, icv
       integer                :: nstep, pl, ns, ncomm
-      character(len=MaxChar) :: cdum, cdum2
+      character(len=MaxChar) :: cdum, cdum2, cdum3
       logical                :: split_found
 
 
@@ -230,10 +230,12 @@ module mod_cv
       do while(.not. split_found)
         read(io,'(a)', end = 100) cdum
         cdum2 = trim(adjustl(cdum))
-        if (cdum2(1:1) /= "#") then
+
+        read(cdum2, *) cdum3
+        if (cdum3(1:1) /= "#") then
           nstep = nstep + 1
         else
-          if (trim(cdum2) == trim(split_word)) then
+          if (trim(cdum3) == trim(split_word)) then
             split_found = .true.
           end if
         end if

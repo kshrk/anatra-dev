@@ -25,11 +25,16 @@ module mod_input
     character(len=MaxChar), allocatable :: fweight(:)
     character(len=MaxChar) :: flist_weight
 
+    integer                :: nprog
+    character(len=MaxChar), allocatable :: fprog(:)
+    character(len=MaxChar) :: flist_prog
+
     integer                :: nprof
     character(len=MaxChar), allocatable :: fprof(:)
     character(len=MaxChar) :: flist_prof
 
     character(len=MaxChar) :: fdx
+    character(len=MaxChar) :: fxyz
 
     character(len=MaxChar) :: fanaparm, fanaparm2  
     character(len=MaxChar) :: fprmtop,  fprmtop2
@@ -62,10 +67,14 @@ module mod_input
       character(len=MaxChar), allocatable :: fweight(:)
       character(len=MaxChar) :: flist_weight       = ''
 
+      character(len=MaxChar), allocatable :: fprog(:)
+      character(len=MaxChar) :: flist_prog         = ''
+
       character(len=MaxChar), allocatable :: fprof(:)
       character(len=MaxChar) :: flist_prof         = ''
 
       character(len=MaxChar) :: fdx                = ''
+      character(len=MaxChar) :: fxyz               = ''
 
       character(len=MaxChar) :: fanaparm           = ''
       character(len=MaxChar) :: fanaparm2          = ''
@@ -73,7 +82,7 @@ module mod_input
       character(len=MaxChar) :: fprmtop            = ''
       character(len=MaxChar) :: fprmtop2           = ''
 
-      integer :: ntraj, ncv, nweight, nprof
+      integer :: ntraj, ncv, nweight, nprog, nprof
       integer :: irank
 
       ! I/O
@@ -91,9 +100,12 @@ module mod_input
         flist_cv,             &
         fweight,              &
         flist_weight,         &
+        fprog,                &
+        flist_prog,           &
         fprof,                &
         flist_prof,           &
         fdx,                  &
+        fxyz,                 &
         fanaparm,             &
         fanaparm2,            &
         fprmtop,              &
@@ -117,6 +129,9 @@ module mod_input
       nweight      = 0
       flist_weight = ''
 
+      nprog        = 0
+      flist_prog   = ''
+
       nprof        = 0
       flist_prof   = ''
 
@@ -127,10 +142,12 @@ module mod_input
       allocate(ftraj  (1:MaxTraj))
       allocate(fcv    (1:MaxTraj))
       allocate(fweight(1:MaxTraj))
+      allocate(fprog  (1:MaxTraj))
       allocate(fprof  (1:MaxTraj))
       ftraj   = ''
       fcv     = ''
       fweight = ''
+      fprog   = ''
       fprof   = ''
 
       ! Read INPUT_PARAM namelist
@@ -141,6 +158,7 @@ module mod_input
       call setup_filelist(ftraj,   flist_traj,   ntraj)
       call setup_filelist(fcv,     flist_cv,     ncv)
       call setup_filelist(fweight, flist_weight, nweight)
+      call setup_filelist(fprog,   flist_prog,   nprog)
       call setup_filelist(fprof,   flist_prof,   nprof)
 
       ! Allocate arrays in input structure
@@ -148,6 +166,7 @@ module mod_input
       allocate(input%ftraj   (1:MaxTraj))
       allocate(input%fcv     (1:MaxTraj))
       allocate(input%fweight (1:MaxTraj))
+      allocate(input%fprog   (1:MaxTraj))
       allocate(input%fprof   (1:MaxTraj))
 
       ! Send values in input parameters to input structure
@@ -164,11 +183,16 @@ module mod_input
       input%fweight      = fweight
       input%flist_weight = flist_weight
 
+      input%nprog        = nprog
+      input%fprog        = fprog
+      input%flist_prog   = flist_prog
+
       input%nprof        = nprof
       input%fprof        = fprof
       input%flist_prof   = flist_prof
 
       input%fdx          = fdx
+      input%fxyz         = fxyz
 
       input%fprmtop      = fprmtop
       input%fprmtop2     = fprmtop2
@@ -178,7 +202,7 @@ module mod_input
 
       ! Deallocate work space
       !
-      deallocate(ftraj, fcv, fweight, fprof)
+      deallocate(ftraj, fcv, fweight, fprog, fprof)
 
     end subroutine read_ctrl_input
 !-----------------------------------------------------------------------

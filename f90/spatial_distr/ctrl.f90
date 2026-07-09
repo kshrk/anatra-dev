@@ -38,6 +38,7 @@ module mod_ctrl
     real(8) :: del(3)                 = (/0.1d0, 0.1d0, 0.1d0/) 
     real(8) :: origin(3)              = 0.0d0
 
+    logical :: calc_sdf               = .true.
     logical :: out_com                = .false.
 
     logical :: use_pbcwrap            = .false.
@@ -124,6 +125,9 @@ module mod_ctrl
       real(8)                :: del(3)                  = (/1.0d0, 1.0d0, 1.0d0/) 
       real(8)                :: origin(3)               = (/0.0d0, 0.0d0, 0.0d0/)
 
+      ! calculate SDF
+      logical                :: calc_sdf                = .true.
+
       ! output CoM coordinate
       logical                :: out_com                 = .false. 
 
@@ -156,6 +160,7 @@ module mod_ctrl
                               ng3,                    &
                               del,                    &
                               origin,                 &
+                              calc_sdf,               &
                               out_com,                &
                               use_pbcwrap,            &
                               centertype,             &
@@ -178,6 +183,7 @@ module mod_ctrl
       write(iw,'("ng3                = ", 3(i0,2x))')      (ng3(i),    i = 1, 3)
       write(iw,'("del                = ", 3(f15.7,2x))')   (del(i),    i = 1, 3)
       write(iw,'("origin             = ", 3(f15.7,2x))')   (origin(i), i = 1, 3)
+      write(iw,'("calc_sdf           = ", a)')             get_tof(calc_sdf)
 
       if (out_com) then
         write(iw,'("out_com            = ", a)')           get_tof(out_com)
@@ -228,6 +234,7 @@ module mod_ctrl
       option%ng3                   = ng3
       option%del                   = del
       option%origin                = origin
+      option%calc_sdf              = calc_sdf
       option%out_com               = out_com
       option%use_pbcwrap           = use_pbcwrap
       option%use_weight            = use_weight

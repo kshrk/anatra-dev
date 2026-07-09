@@ -471,22 +471,32 @@ module mod_voronoi
     !
     !---------------------------------------------------------------------------
 
-    function voronoi_state(voronoi, x, y, z)
+    function voronoi_state(voronoi, x, y, z, cand)
 
       implicit none
 
       type(s_voronoi), intent(in) :: voronoi
       real(8),         intent(in) :: x
       real(8),         intent(in) :: y
-      real(8),         intent(in), optional :: z 
+      real(8),         intent(in), optional :: z
+      integer,         intent(in), optional :: cand(:)  
 
       ! return value
       integer :: voronoi_state 
 
       ! local variables
       integer :: ic
-      real(8) :: dx, dy, dz, rsq(MaxNcell)
+      real(8) :: dx, dy, dz
 
+      ! Arrays
+      real(8) :: rsq(MaxNcell)
+      integer :: cnd(MaxNcell)
+
+
+      cnd = 1
+      if (present(cand)) then
+        cnd(1:voronoi%ncell) = cand(1:voronoi%ncell)
+      end if
 
       if (present(z)) then
 
@@ -496,6 +506,11 @@ module mod_voronoi
           dy      = (y - voronoi%cellpos(2, ic)) / voronoi%normvec(2)
           dz      = (z - voronoi%cellpos(3, ic)) / voronoi%normvec(3)
           rsq(ic) = dx * dx + dy * dy + dz * dz
+
+          if (cnd(ic) /= 1) then
+            rsq(ic) = 1.0d10
+          end if
+
         end do
 
       else
@@ -506,6 +521,11 @@ module mod_voronoi
        
           rsq(ic) = dx * dx + dy * dy
          end do
+
+         if (cnd(ic) /= 1) then
+           rsq(ic) = 1.0d10
+         end if
+
       end if
 
       voronoi_state = minloc(rsq(1:voronoi%ncell), 1)

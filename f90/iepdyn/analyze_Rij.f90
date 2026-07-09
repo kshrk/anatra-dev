@@ -263,7 +263,7 @@
         end do
 
         do is = 1, nstate
-          if (is /= js) then
+          if (is /= js .and. weight > 1.0d-10) then
             f%R(:, is, js) = weight * f%R(:, is, js) / (state_sum * dt) 
           end if
         end do

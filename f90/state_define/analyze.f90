@@ -40,20 +40,32 @@ module mod_analyze
 
       type(s_voronoi)             :: voronoi
       type(s_cv),     allocatable :: cv(:)
+      type(s_cv),     allocatable :: prog(:) 
       type(s_states), allocatable :: states(:)
 
       integer                 :: colmax
-      integer                 :: ifile, istep, icv, nfile
-      integer                 :: ib, ic, jdim 
-      real(8)                 :: crd(3)
+      integer                 :: ifile, istep, icv, nfile, icell, ncell
+      integer                 :: ib, ic, id, jdim
+      real(8)                 :: crd(3), pval, plow, pup
       character(len=MaxChar)  :: fhead_out  
 
+      ! Arrays
+      !
+      integer, allocatable :: cand(:)
 
       ! setup
       !
       nfile  = input%ncv
+      ncell  = option%vr_ncell
+
       colmax = maxval(option%xyzcol(1:option%ndim))
       allocate(cv(nfile), states(nfile))
+
+      if (option%use_prog_restr) then
+        allocate(prog(nfile))
+      end if
+
+      allocate(cand(1:ncell)) ! used only if use_prog_restr = .true.
 
       ! setup voronoi
       !
@@ -82,6 +94,17 @@ module mod_analyze
       end do
       write(iw,'(">> Finished")')
 
+      ! read progressive-coordinate files
+      !
+      if (option%use_prog_restr) then
+        write(iw,*)
+        write(iw,'("> Read Progressive-Coordinate file")')
+        do ifile = 1, nfile
+          call read_cv(input%fprog(ifile), 1, prog(ifile))
+        end do
+        write(iw,'(">> Finished")')
+      end if
+
       ! memory allocation
       !
       do ifile = 1, nfile
@@ -102,27 +125,58 @@ module mod_analyze
             crd(icv) = cv(ifile)%data(option%xyzcol(icv), istep)
           end do
 
-          if (option%ndim == 3) then
-            states(ifile)%data(istep) = voronoi_state(voronoi, crd(1), crd(2), z = crd(3))
-          else
-            states(ifile)%data(istep) = voronoi_state(voronoi, crd(1), crd(2))
+          cand = 1 
+          if (option%use_prog_restr) then
+            cand = 0
+            pval = prog(ifile)%data(1, istep)
+
+            do icell = 1, ncell
+              plow = option%vr_prog_range(1, icell)
+              pup  = option%vr_prog_range(2, icell)
+
+              if (plow <= pval .and. pval < pup) then
+                cand(icell) = 1
+              end if
+
+            end do 
+
           end if
+
+          if (option%ndim == 3) then
+            states(ifile)%data(istep) = voronoi_state(voronoi, crd(1), crd(2), z = crd(3), cand = cand)
+          else
+            states(ifile)%data(istep) = voronoi_state(voronoi, crd(1), crd(2), cand = cand)
+          end if
+
+          id                        = states(ifile)%data(istep)
+          states(ifile)%data(istep) = option%merge_ids(id)
         end do
       end do
 
       write(iw,'(">> Finished")')
 
 
-      do ifile = 1, nfile
-        write(fhead_out, '(a,i4.4,".dat")') trim(output%fhead), ifile
+      if (nfile > 1) then
+        do ifile = 1, nfile
+          write(fhead_out, '(a,i4.4,".dat")') trim(output%fhead), ifile
+          open(UnitOUT, file=trim(fhead_out))
+          do istep = 1, states(ifile)%nstep
+            write(UnitOUT,'(2i10)') istep, states(ifile)%data(istep) 
+          end do
+          close(UnitOUT)
+        end do
+      else
+        write(fhead_out, '(a,".dat")') trim(output%fhead)
         open(UnitOUT, file=trim(fhead_out))
-        do istep = 1, states(ifile)%nstep
-          write(UnitOUT,'(2i10)') istep, states(ifile)%data(istep) 
+        do istep = 1, states(1)%nstep
+          write(UnitOUT,'(2i10)') istep, states(1)%data(istep)
         end do
         close(UnitOUT)
-      end do
+      end if
 
       deallocate(cv, states)
+
+      if (allocated(prog)) deallocate(prog)
 
     end subroutine determine_voronoi_state 
 !-----------------------------------------------------------------------

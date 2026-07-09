@@ -116,8 +116,8 @@ module mod_analyze
       ! Load xyz (if needed)
       !
       if (option%fit) then
-        write(fxyz,'(a,".sd.xyz")') trim(output%fhead)
-        call open_file(fxyz, io)
+        !write(fxyz,'(a,".sd.xyz")') trim(output%fhead)
+        call open_file(input%fxyz, io)
         call read_xyz (io, fit_xyz)
         close(io)
 
@@ -306,6 +306,8 @@ module mod_analyze
       end do
 
       if (option%out_com) close(io_com)
+
+      if (.not. option%calc_sdf) return 
 
       ! Determine normalization const.
       !
