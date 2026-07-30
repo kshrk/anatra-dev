@@ -28,6 +28,11 @@ module mod_ctrl
   character(*), parameter, public :: CumDirecTypes(2) = (/'INCREASE', &
                                                           'DECREASE'/)
 
+  integer,      parameter, public :: ConvCheckTypeNumber = 1 
+  integer,      parameter, public :: ConvCheckTypeLength = 2
+  character(*), parameter, public :: ConvCheckTypes(2)   = (/'NUMBER', &
+                                                             'LENGTH'/) 
+
   ! structures
   !
   type :: s_option
@@ -37,6 +42,7 @@ module mod_ctrl
     logical :: use_dissociate_state = .false.
     logical :: use_constant_Qij     = .false.
     logical :: use_rsto_Rij         = .true.
+    logical :: use_smoothing        = .false.
     logical :: output_histogram     = .false.
     logical :: extrapolate          = .false.
     logical :: calc_Pint            = .false.
@@ -49,6 +55,7 @@ module mod_ctrl
     integer :: input_type           = InputTypeTimeSeries
     integer :: errex_type           = ErrexTypeExclude 
     integer :: cumdirec             = CumDirecIncrease
+    integer :: conv_check_type      = ConvCheckTypeNumber
 
     integer :: nmol                               = NotSpecified 
     integer :: ndim                               = NotSpecified 
@@ -58,9 +65,11 @@ module mod_ctrl
     integer :: dissociate_state_ids   (MaxStates) = NotSpecified
     integer :: initial_state_ids      (MaxStates) = NotSpecified
     integer :: err_exception_state_ids(MaxStates) = NotSpecified
+    integer :: ntraj_each_state       (MaxStates) = NotSpecified
     integer :: nkmax                              = 1000
     integer :: nblock                             = 5
     integer :: ncum                               = 10
+    integer :: smooth_order                       = 5
 
     ! File names 
     !
@@ -180,6 +189,7 @@ module mod_ctrl
       logical :: use_dissociate_state = .false.
       logical :: use_constant_Qij     = .false.
       logical :: use_rsto_Rij         = .true.
+      logical :: use_smoothing        = .false.
       logical :: output_histogram     = .false.
       logical :: extrapolate          = .false.
       logical :: calc_Pint            = .false.
@@ -192,6 +202,7 @@ module mod_ctrl
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
       character(len=MaxChar) :: errex_type       = 'EXCLUDE'
       character(len=MaxChar) :: cumdirec         = 'INCREASE'
+      character(len=MaxChar) :: conv_check_type  = 'NUMBER'
       character(len=MaxChar) :: f_unperturbed_id = ''
       character(len=MaxChar) :: f_cQij           = '' 
       
@@ -203,9 +214,11 @@ module mod_ctrl
       integer :: dissociate_state_ids   (MaxStates) = NotSpecified
       integer :: initial_state_ids      (MaxStates) = NotSpecified
       integer :: err_exception_state_ids(MaxStates) = NotSpecified
+      integer :: ntraj_each_state       (MaxStates) = NotSpecified
       integer :: nkmax                              = 1000
       integer :: nblock                             = 5
       integer :: ncum                               = 10
+      integer :: smooth_order                       = 5
       real(8) :: temperature                        = 300.0d0
       real(8) :: dt
       real(8) :: t_sparse
@@ -231,6 +244,7 @@ module mod_ctrl
         use_dissociate_state,   &
         use_constant_Qij,       &
         use_rsto_Rij,           &
+        use_smoothing,          &
         output_histogram,       &
         extrapolate,            &
         check_Kijk,             &
@@ -242,6 +256,7 @@ module mod_ctrl
         input_type,             &
         errex_type,             &
         cumdirec,               &
+        conv_check_type,        &
         f_unperturbed_id,       &
         f_cQij,                 &
         nmol,                   &
@@ -252,9 +267,11 @@ module mod_ctrl
         dissociate_state_ids,   &
         initial_state_ids,      &
         err_exception_state_ids,&
+        ntraj_each_state,       &
         nkmax,                  &
         nblock,                 &
         ncum,                   &
+        smooth_order,           &
         temperature,            &
         dt,                     &
         t_sparse,               &
@@ -275,6 +292,7 @@ module mod_ctrl
       write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
       write(iw,'("use_constant_Qij     = ", a)')   get_tof(use_constant_Qij)
       write(iw,'("use_rsto_Rij         = ", a)')   get_tof(use_rsto_Rij)
+      write(iw,'("use_smoothing        = ", a)')   get_tof(use_smoothing)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
@@ -289,7 +307,8 @@ module mod_ctrl
       write(iw,'("ndim                 = ", i0)')     ndim
       write(iw,'("nstate               = ", i0)')     nstate
       write(iw,'("temperature          = ", f20.10)') temperature
-      write(iw,'("nblock               = ", i0)')     nblock 
+      write(iw,'("nblock               = ", i0)')     nblock
+      write(iw,'("smooth_order         = ", i0)')     smooth_order 
 
       write(iw,'("dt                   = ", f20.10)') dt
       write(iw,'("t_sparse             = ", f20.10)') t_sparse
@@ -407,12 +426,20 @@ module mod_ctrl
       end if
       option%cumdirec = iopt
 
+      iopt = get_opt(conv_check_type, ConvCheckTypes, ierr)
+      if (ierr /= 0) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("conv_check_type = ",a," is not available.")') trim(conv_check_type)
+      end if
+      option%conv_check_type = iopt
+
       option%use_perturbed_traj   = use_perturbed_traj
       option%use_reflection_state = use_reflection_state
       option%use_product_state    = use_product_state
       option%use_dissociate_state = use_dissociate_state
       option%use_constant_Qij     = use_constant_Qij
       option%use_rsto_Rij         = use_rsto_Rij
+      option%use_smoothing        = use_smoothing
       option%output_histogram     = output_histogram
       option%extrapolate          = extrapolate
       option%check_Kijk           = check_Kijk
@@ -444,12 +471,14 @@ module mod_ctrl
       option%nkmax                = nkmax
       option%nblock               = nblock
       option%ncum                 = ncum
+      option%smooth_order         = smooth_order
       option%temperature          = temperature
       option%dt                   = dt
       option%t_sparse             = t_sparse
       option%t_range              = t_range
       option%t_extend             = t_extend
       option%dt_tcfout            = dt_tcfout
+      option%ntraj_each_state     = ntraj_each_state
 
       ! Error exception states (hidden options)
       ! is_errex(is) = .true.  ---> exclude state is for error estimation
@@ -576,6 +605,14 @@ module mod_ctrl
          stop
       end if
 
+      if (check_cumulative) then
+        if (option%conv_check_type == ConvCheckTypeLength .and. ntraj_each_state(1) == NotSpecified) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("ntraj_each_state should be specified if conv_check_type = Length")')
+          stop
+        end if
+      end if
+
       if (calc_Pint .and. calc_Steady) then
         write(iw,'("Read_Ctrl_Option> Error.")')
         write(iw,'("Calc_Pint and Calc_Steady can not be used at the same time.")')
@@ -655,7 +692,7 @@ module mod_ctrl
       do while (.true.)
         read(io,'(a)', end = 100) line
 
-        if (line(1:1) /= "#") then
+        if (line(1:1) /= "#" .and. line(1:1) /= "!") then
           istate = istate + 1
 
           read(line,*) ((option%state_def(imm, idm, istate), imm = 1, 2), &

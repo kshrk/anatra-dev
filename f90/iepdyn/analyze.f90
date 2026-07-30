@@ -62,6 +62,7 @@ module mod_analyze
     integer, allocatable :: use_for_Rij(:)
     integer, allocatable :: nfile_each_state(:)
     integer, allocatable :: nfile_to_be_read(:)
+    integer, allocatable :: nlen_each_traj(:)
     integer, allocatable :: ista(:)
     integer, allocatable :: iend(:)
   end type s_inpcond
@@ -200,6 +201,7 @@ module mod_analyze
       allocate(ic%nfile_each_state(nstate))
       allocate(ic%nfile_to_be_read(nstate))
       allocate(ic%ista(nstate), ic%iend(nstate))
+      allocate(ic%nlen_each_traj(nstate))
 
       ic%nfile_each_state = 0
       do ifile = 1, nfile
@@ -385,13 +387,24 @@ module mod_analyze
         ! Set Start and End trajectories 
         !
         write(iw,'("  File block")')
-        do is = 1, nstate
-          block_size  = ic%nfile_each_state(is) / option%nblock
-          ic%ista(is) = block_size * (iblock - 1) + 1
-          ic%iend(is) = block_size * iblock
-          write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
-        end do
-        write(iw,*)
+        if (option%conv_check_type == ConvCheckTypeNumber) then
+          do is = 1, nstate
+            block_size  = ic%nfile_each_state(is) / option%nblock
+            ic%ista(is) = block_size * (iblock - 1) + 1
+            ic%iend(is) = block_size * iblock
+            write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
+          end do
+          write(iw,*)
+        else if (option%conv_check_type == ConvCheckTypeLength) then
+          do is = 1, nstate
+            ic%nlen_each_traj(is) = ic%nfile_each_state(is) / option%ntraj_each_state(is)
+            block_size            = ic%nlen_each_traj(is)   / option%ncum 
+            ic%ista(is)           = block_size * (iblock - 1) + 1 
+            ic%iend(is)           = block_size * iblock 
+            write(iw,'(2x,"State ", i5, " (trjectory length) : ", i0,2x,i0)') &
+              is, ic%ista(is), ic%iend(is) 
+          end do
+        end if
 
         ! Calculate Kernels
         !
@@ -432,12 +445,12 @@ module mod_analyze
 
       ! Local
       !
-      integer      :: nstate, block_size
+      integer      :: nstate, block_size, ntraj_each
       type(s_func) :: fs
 
       ! Dummy
       !
-      integer :: is, iblock
+      integer :: is, iblock, itraj
 
       ! Array
       !
@@ -465,19 +478,42 @@ module mod_analyze
         !
         write(iw,'("  File block")')
         if (option%cumdirec == CumDirecIncrease) then
-          do is = 1, nstate
-            block_size  = ic%nfile_each_state(is) / option%ncum
-            ic%ista(is) = 1
-            ic%iend(is) = block_size * iblock
-            write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
-          end do
+          if (option%conv_check_type == ConvCheckTypeNumber) then
+            do is = 1, nstate
+              block_size  = ic%nfile_each_state(is) / option%ncum
+              ic%ista(is) = 1
+              ic%iend(is) = block_size * iblock
+              write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
+            end do
+          else if (option%conv_check_type == ConvCheckTypeLength) then
+            do is = 1, nstate
+              ic%nlen_each_traj(is) = ic%nfile_each_state(is) / option%ntraj_each_state(is)
+              block_size            = ic%nlen_each_traj(is)   / option%ncum 
+              ic%ista(is)           = 1
+              ic%iend(is)           = block_size * iblock
+              write(iw,'(2x,"State ", i5, " (trjectory length) : ", i0,2x,i0)') &
+                is, ic%ista(is), ic%iend(is) 
+            end do
+          end if
         else if (option%cumdirec == CumDirecDecrease) then
-          do is = 1, nstate
-            block_size  = ic%nfile_each_state(is) / option%ncum
-            ic%ista(is) = block_size * (iblock - 1) + 1
-            ic%iend(is) = ic%nfile_each_state(is)
-            write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
-          end do
+
+          if (option%conv_check_type == ConvCheckTypeNumber) then
+            do is = 1, nstate
+              block_size  = ic%nfile_each_state(is) / option%ncum
+              ic%ista(is) = block_size * (iblock - 1) + 1
+              ic%iend(is) = ic%nfile_each_state(is)
+              write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
+            end do
+          else if (option%conv_check_type == ConvCheckTypeLength) then
+            do is = 1, nstate
+              ic%nlen_each_traj(is) = ic%nfile_each_state(is) / option%ntraj_each_state(is)
+              block_size            = ic%nlen_each_traj(is)   / option%ncum 
+              ic%ista(is)           = block_size * (iblock - 1) + 1 
+              ic%iend(is)           = ic%nlen_each_traj(is) 
+              write(iw,'(2x,"State ", i5, " (trjectory length) : ", i0,2x,i0)') &
+                is, ic%ista(is), ic%iend(is) 
+            end do
+          end if
         end if
         write(iw,*)
 
@@ -764,6 +800,7 @@ module mod_analyze
       ! Dummy
       !
       integer :: ifile, istep, iseg, is, js, is1, is2, ib, id, idir, ierr
+      integer :: id_traj, ilen
 
       ! Arrays
       !
@@ -828,14 +865,30 @@ module mod_analyze
           ! For block average or cumulative analysis
           !    
           if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
-            id = ic%unperturbed_ids(ifile)
-            if (id > 0) then
-              ncount_traj(id) = ncount_traj(id) + 1
-              if (.not. option%is_errex(id)) then
-                if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
-                  cycle
+
+            if (option%conv_check_type == ConvCheckTypeNumber) then
+              id = ic%unperturbed_ids(ifile)
+              if (id > 0) then
+                ncount_traj(id) = ncount_traj(id) + 1
+                if (.not. option%is_errex(id)) then
+                  if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                    cycle
+                  end if
                 end if
               end if
+            else if (option%conv_check_type == ConvCheckTypeLength) then
+              id = ic%unperturbed_ids(ifile)
+              if (id > 0) then
+                ncount_traj(id) = ncount_traj(id) + 1
+                id_traj         = (ncount_traj(id) - 1) / ic%nlen_each_traj(id) + 1
+                ilen            = ncount_traj(id) - (id_traj - 1) * ic%nlen_each_traj(id)
+                if (.not. option%is_errex(id)) then
+                  if (ilen < ic%ista(id) .or. ilen > ic%iend(id)) then
+                    cycle
+                  end if
+                end if
+              end if
+
             end if
           end if
 
@@ -988,6 +1041,10 @@ module mod_analyze
       ! 
       call normalize_Rij(option, f)
       call normalize_Kijk(option, b, f, verbose = vb)
+
+      if (option%use_smoothing) then
+        call smooth_RK(option, b, f)
+      end if
 
       ! Check Kijk
       !
@@ -1233,6 +1290,7 @@ module mod_analyze
     include 'analyze_Kijk.f90'
     include 'analyze_Mij.f90'
     include 'analyze_bc.f90'
+    include 'analyze_smooth.f90'
     include 'analyze_reacdyn.f90'
     include 'analyze_pint.f90'
 
