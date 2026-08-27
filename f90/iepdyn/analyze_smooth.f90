@@ -123,6 +123,7 @@ subroutine smooth_histogram(n, x, y, nk)
     !--------------------------------------------------
 
     orig_int = sum(x)
+    !orig_int = sum(x(2:n-1)) + 0.5d0 * (x(1) + x(n))
 
     !--------------------------------------------------
     ! Convolution
@@ -153,6 +154,7 @@ subroutine smooth_histogram(n, x, y, nk)
     !--------------------------------------------------
 
     smooth_int = sum(y)
+    !smooth_int = sum(y(2:n-1)) + 0.5d0*(y(1) + y(n))
 
     if (abs(smooth_int) > tiny(smooth_int)) then
         scale = orig_int / smooth_int

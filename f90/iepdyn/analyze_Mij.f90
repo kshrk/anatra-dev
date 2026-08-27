@@ -64,19 +64,19 @@
             if (istep > 0) then
               ksum(js, ib)   = ksum(js, ib) - dt * f%K(istep - 1, js, ib)
               !ksum(js, ib)   = ksum(js, ib) &
-              !        - 0.5d0*dt * (f%K(istep - 1, js, ib) + f%K(istep, js, ib))
+              !        - 0.5d0 * dt * (f%K(istep - 1, js, ib) + f%K(istep, js, ib))
               f%M(istep, ib) = f%M(istep, ib) + ksum(js, ib) 
             end if 
 
-            if (f%M(istep, ib) < 0.0d0) then
-              if (abs(f%M(istep, ib)) > 1.0d-3) then
-                write(iw,'("Calc_Mjk_from_Kijk> Error.")')
-                write(iw,'("Negative population has been detected. stop")')
-                stop
-              else
-                f%M(istep, ib) = 0.0d0
-              end if 
-            end if
+            !if (f%M(istep, ib) < 0.0d0) then
+            !  if (abs(f%M(istep, ib)) > 1.0d-3) then
+            !    write(iw,'("Calc_Mjk_from_Kijk> Error.")')
+            !    write(iw,'("Negative population has been detected. stop")')
+            !    stop
+            !  else
+            !    f%M(istep, ib) = 0.0d0
+            !  end if 
+            !end if
           end do
 
         end do

@@ -43,26 +43,39 @@
         is_final = .false. 
         do istep = nt_sparse + 1, nstep, nt_sparse
           is = state%data(istep, imol)
+
+          ! Detect Crossing 
+          !
           if (is /= js) then
-            ireac  = ireac + 1
-            
+            ireac = ireac + 1
+           
+            ! First crossing 
+            ! 
             if (ireac == 1) then
               ista              = istep - nt_sparse
               js                = is
-              if (unp_id == js .or. unp_id == -1) then 
+              if (unp_id == js .or. unp_id <= UseForAnyState &
+                .or. is_unp_neighbor(option, ks, unp_id)) then 
                 fwrk%h(js, ks) = fwrk%h(js, ks) + 1.0d0
               end if
+
+            ! Second and subsequent crossings
+            !
             else
               iend    = istep - nt_sparse 
               it_diff = iend - ista
               it_diff = int(it_diff / dble(nt_sparse))
 
-              if (unp_id == js .or. unp_id == -1) then
+              ! Count transition if state j (in i <- j <- k) is unperturbed 
+              !
+              if (unp_id == js .or. unp_id <= UseForAnyState &
+                .or. is_unp_neighbor(option, ks, unp_id)) then
                 ik = fwrk%kmesh(is, js, ks)
                 if (ik == 0) then
                   fwrk%nk              = fwrk%nk + 1
                   ik                   = fwrk%nk 
                   fwrk%kmesh(is, js, ks) = ik
+                  write(iw,'("i j k = ", i5,i5,i5)') is, js, ks
 
                   if (ik >= fwrk%nkmax) then
                     write(iw,'("Update_Kijk_wo_Normalize> Error.")')
@@ -72,146 +85,60 @@
                     stop
                   end if
 
-                end if 
+                end if
+
+                if (it_diff > nt_range) then
+                  write(iw,'("Update_kijk_wo_Normalize> Error.")')
+                  write(iw,'("Observed transition time exceeded t_range")')
+                  stop
+                end if
+
                 fwrk%K(it_diff, ik) = fwrk%K(it_diff, ik) + 1.0d0
+
               end if
 
-              if (unp_id == is .or. unp_id == -1) then
-                fwrk%h(is, js) = fwrk%h(is, js) + 1.0d0
-              end if
-
-              ls      = ks
-              ks      = js
-              js      = is
-              ista    = istep - nt_sparse 
-
-              !if (istep == nstep) then
               if (istep == nstep .or. istep + nt_sparse > nstep) then
                 is_final = .true.
               end if
 
+              if (.not. is_final) then
+                if (unp_id == is .or. unp_id <= UseForAnyState &
+                  .or. is_unp_neighbor(option, js, unp_id)) then
+                  fwrk%h(is, js) = fwrk%h(is, js) + 1.0d0
+                end if
+              end if
+
+              ls   = ks
+              ks   = js
+              js   = is
+              ista = istep - nt_sparse 
+
             end if
 
-          end if
+          end if ! is /= js
         end do
 
-        ! New implementation
-        !
         if (ireac == 0) cycle
 
-        if (option%use_product_state) then
-          is_prod = .false. 
-          do iprod = 1, option%nproduct
-            if (js == option%product_state_ids(iprod)) then
-              is_prod = .true.
-              exit 
-            end if
-          end do
-          if (is_prod) cycle
-        end if
-!
-!        if (option%use_dissociate_state) then
-!          is_dissoc = .false.
-!          do idissoc = 1, option%ndissoc
-!            if (js == option%dissociate_state_ids(idissoc)) then
-!              is_dissoc = .true.
+!        if (option%use_product_state) then
+!          is_prod = .false. 
+!          do iprod = 1, option%nproduct
+!            if (js == option%product_state_ids(iprod)) then
+!              is_prod = .true.
 !              exit 
 !            end if
 !          end do
-!          if (is_dissoc) cycle 
-!        end if
-!
-!        if (.not. option%is_dissoc(js)) then
-!          if (unp_id == js .or. unp_id == -1) then
-!            hit_count(js, ks) = hit_count(js, ks) - 1.0d0
-!          end if
+!          if (is_prod) cycle
 !        end if
 
-        if (option%is_dissoc(js)) then
-          if (is_final .and. (unp_id == js .or. unp_id == -1)) then
-            fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
-          end if
-        else
-          if (unp_id == js .or. unp_id == -1) then
-            fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
-          end if
-        end if
-
-        ! End of New implementation
-        !
-
-!        if (ireac == 0 .or. ireac == 1) then
-!
-!          if (option%use_product_state) then
-!            do iprod = 1, option%nproduct
-!              if (js == option%product_state_ids(iprod)) then
-!                return
-!              end if
-!            end do 
-!          end if
-!
-!          if (option%use_dissociate_state) then
-!            do idissoc = 1, option%ndissoc
-!              if (js == option%dissociate_state_ids(idissoc)) then
-!                return
-!              end if
-!            end do 
-!          end if
-!
-!          if (ireac == 1) then
-!            if (.not. option%is_dissoc(js)) then
-!              if (unp_id == js .or. unp_id == -1) then
-!                hit_count(js, ks) = hit_count(js, ks) - 1.0d0
-!              end if
-!            end if
-!            return
-!          end if
-!
-!          !write(iw,'("Update_Kijk_wo_normalize> Error.")')
-!          !write(iw,'("No reaction is observed.")')
-!          !stop
-!
-!          !if (option%use_product_state) then
-!          !  do iprod = 1, option%nproduct
-!          !    if (js == option%product_state_ids(iprod)) then
-!          !      return
-!          !    end if
-!          !  end do 
-!          !else if (option%use_dissociate_state) then
-!          !  do idissoc = 1, option%ndissoc
-!          !    if (js == option%dissociate_state_ids(idissoc)) then
-!          !      return
-!          !    end if
-!          !  end do 
-!          !else
-!          !  write(iw,'("Update_Kijk_wo_normalize> Error.")')
-!          !  write(iw,'("No reaction is observed.")')
-!          !  stop
-!          !end if
-!
-!          !if (ireac == 1) then
-!          !  if (.not. option%is_dissoc(js)) then 
-!          !    hit_count(js, ks) = hit_count(js, ks) - 1.0d0
-!          !  end if
-!          !end if
-!
-!          !if (ireac == 1) then
-!          !  if (.not. option%is_dissoc(js)) then
-!          !    if (unp_id == js .or. unp_id == -1) then
-!          !      hit_count(js, ks) = hit_count(js, ks) - 1.0d0
-!          !    end if
-!          !  end if
-!          !end if
-!
-!        else
-!
-!          if (.not. option%is_dissoc(js)) then
-!            if (unp_id == js .or. unp_id == -1) then
-!              hit_count(js, ks) = hit_count(js, ks) - 1.0d0
-!            end if
-!          end if
-!
-!        end if
+         ! Eliminate incomplete events
+         !
+         if (.not. is_final .and. .not. option%is_dissoc(js)) then
+           if (unp_id == js .or. unp_id <= UseForAnyState &
+             .or. is_unp_neighbor(option, ks, unp_id)) then
+             fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
+           end if 
+         end if
 
       end do
 
@@ -241,6 +168,7 @@
       integer                :: is, js, ks, ik
       real(8)                :: val
 
+
       ! Setup
       !
 
@@ -269,7 +197,7 @@
             end if
 
           end if
-          fwrk%K(istep, ik) = fwrk%K(istep, ik) + val 
+          fwrk%K(istep, ik) = fwrk%K(istep, ik) + val
         end if 
       end do
  100  return 
@@ -398,6 +326,7 @@
           is2 = boundary%b2p(2, ib)
         
           write(iw,'(i5,i5," : ", f20.10)') is2, is1, f%hit_count(ib) 
+          !write(iw,'(i5,i5," from K : ", f20.10)') is2, is1, sum(f%K(:, :, ib)) * f%hit_count(ib) * dt
         end do
         write(iw,*)
       end if
@@ -414,7 +343,7 @@
       type(s_output),   intent(in)    :: output
       type(s_option),   intent(in)    :: option
       type(s_boundary), intent(in)    :: boundary
-      type(s_func),     intent(inout) :: f
+      type(s_func),     intent(in)    :: f
 
       ! I/O
       !
@@ -429,6 +358,8 @@
       !
       integer :: is, js, is1, is2, ib, id, istep
 
+
+      if (.not. option%output_Kijk) return
 
       ! Setup
       !
@@ -534,7 +465,25 @@
         end do
         write(iw,'("Kint value at Boundary ", i5, i5, " : ", f15.7)') &
               is2, is1, state_sum
+        !write(iw,'("Hist value at Boundary ", i5, i5, " : ", f15.7)') &
+        !      is2, is1, f%hit_count(ib)
       end do
+
+      write(iw,*)
+      do ib = -nboundary, nboundary
+        if (ib == 0) cycle
+
+        is1 = boundary%b2p(1, ib)
+        is2 = boundary%b2p(2, ib)
+
+        do js = 1, nstate
+          if (boundary%is_connected(js, is2)) then
+            write(iw,'("Kint for ", i5, i5, i5," : ", f15.7)') &
+                    js, is2, is1, sum(f%K(:, js, ib)) * dt
+          end if
+        end do
+      end do
+      write(iw,*)
 
     end subroutine check_Kijk
 !-----------------------------------------------------------------------
@@ -564,6 +513,8 @@
       !
       integer :: is, js, ks, istep, ik
 
+
+      if (.not. option%output_Kijk) return 
 
       ! Setup
       !
@@ -596,7 +547,7 @@
         if (ik == 0) cycle
         do istep = 0, nt_range
           val = fwrk%K(istep, ik) 
-          if (val >= 0.999d0) then
+          if (val >= 1.0d-10) then
             write(io, '("K", 2x, i5, 2x, i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, ks, istep, val
           end if
         end do 
@@ -633,7 +584,7 @@
         if (ik == 0) cycle
         do istep = 0, nt_range
           val = fwrk%K(istep, ik) 
-          if (val >= 0.999d0) then
+          if (val >= 1.0d-10) then
             write(io, '("K", 2x, i5, 2x, i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, ks, istep, val
           end if
         end do 
@@ -647,3 +598,23 @@
 
     end subroutine output_Kijk_hist
 !-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    function is_unp_neighbor(option, js, unp_id)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option), intent(in) :: option
+      integer,        intent(in) :: js
+      integer,        intent(in) :: unp_id
+
+      logical :: is_unp_neighbor
+
+      
+      is_unp_neighbor = .false.
+      if (.not. option%unperturbed_neighbor) return 
+      if (js == unp_id) is_unp_neighbor = .true.
+
+    end function is_unp_neighbor
+!-----------------------------------------------------------------------
+

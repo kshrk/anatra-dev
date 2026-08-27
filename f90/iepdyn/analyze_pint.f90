@@ -100,7 +100,11 @@
         mapb_inv(ib)        = iu
 
         Mu(iu) = sum(f%M(0:nt_range, ib))
+        !Mu(iu) = sum(f%M(1:nt_range-1, ib)) &
+        !       + 0.5d0 * (f%M(0, ib) + f%M(nt_range, ib))
         Ru(iu) = sum(f%R(0:nt_range, is2, is1))
+        !Ru(iu) = sum(f%R(1:nt_range-1, is2, is1)) &
+        !       + 0.5d0 * (f%R(0, is2, is1) + f%R(nt_range, is2, is1))
 
         ju = 0
         do jb = -nboundary, nboundary
@@ -111,6 +115,8 @@
 
           if (is1 == js2) then
             Kuu(iu, ju) = sum(f%K(0:nt_range, is2, jb))
+            !Kuu(iu, ju) = sum(f%K(1:nt_range-1, is2, jb)) &
+            !            + 0.5d0 * (f%K(0, is2, jb) + f%K(nt_range, is2, jb))
           end if 
         end do
       end do
@@ -126,6 +132,8 @@
             jb = -ib
             ju = mapb_inv(jb)
             Ru(ju) = sum(f%R(0:nt_range, is2, is1))
+            !Ru(ju) = sum(f%R(1:nt_range-1, is2, is1))  &
+            !       + 0.5d0*(f%R(0, is2, is1) + f%R(nt_range, is2, is1))
             Ru(iu) = 0.0d0
 
             Kuu(ju, :) = 0.0d0
@@ -229,21 +237,21 @@
           stop
         end if
 
-!        ! << DEBUG
-!        write(iw,*)
-!        write(iw,'("[ Eigenvalues ]")')
-!        do iu = 1, nbt
-!          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
-!        end do
-!        write(iw,*)
-!        write(iw,'("[ Eigenvector corresponding to steady state]")')
-!        iu = maxloc(wr(:), dim = 1)
-!
-!        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
-!        do ju = 1, nbt
-!          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
-!        end do 
-!        ! >> DEBUG
+        ! << DEBUG
+        write(iw,*)
+        write(iw,'("[ Eigenvalues ]")')
+        do iu = 1, nbt
+          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
+        end do
+        write(iw,*)
+        write(iw,'("[ Eigenvector corresponding to steady state]")')
+        iu = maxloc(wr(:), dim = 1)
+
+        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
+        do ju = 1, nbt
+          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
+        end do 
+        ! >> DEBUG
 
         iu = maxloc(wr(:), dim = 1)
         Qinf(:) = vr(:, iu)
@@ -303,6 +311,13 @@
           do is = 1, nstate
             if (option%is_reflect(is) .or. option%is_product(is)) cycle
             write(io,'(i5, 2x, 2(e15.7,2x))') is, ip%prob(is), ip%fe(is)
+          end do
+          write(io,*)
+          write(io,'("# Qinf")')
+          do iu = 1, nbt
+            js = map(1, iu)
+            is = map(2, iu)
+            write(io,'(i5,2x,i5,2x,e15.7)') is, js, Qinf(iu) 
           end do
           close(io)
         end if

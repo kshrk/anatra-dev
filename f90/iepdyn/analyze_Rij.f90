@@ -60,7 +60,8 @@
         !
         do jstep = 1, nstep
           js = state%data(jstep, imol)
-          if ((js == unp_id .or. unp_id == -1) .and. option%is_initial(js)) then
+          if ((js == unp_id .or. unp_id <= UseForAnyState) &
+            .and. option%is_initial(js)) then
             nini           = nini + 1
             init_set(nini) = jstep 
           end if
@@ -84,10 +85,10 @@
           js      = state%data(jstep, imol)
           it_reac = -1
 
-          if (js /= unp_id .and. unp_id /= -1) then
-            write(iw,'("Update_rsto_Rij> Error. Something went wrong")')
-            stop
-          end if 
+          !if (js /= unp_id .and. unp_id /= -1) then
+          !  write(iw,'("Update_rsto_Rij> Error. Something went wrong")')
+          !  stop
+          !end if 
 
           do istep = nt_sparse + jstep, nstep, nt_sparse
             is = state%data(istep, imol)
@@ -103,7 +104,7 @@
           !  write(iw,'("Molecule ", i5, ": No reaction is observed.")') imol
           !  cycle 
           !end if
-
+           
           do istep = 0, it_reac, nt_sparse
             it_diff              = it_reac - istep
             it_diff              = int(it_diff / dble(nt_sparse))
@@ -341,6 +342,8 @@
       integer :: is, js, id, istep
 
 
+      if (.not. option%output_Rij) return
+
       ! Setup
       !
       nstate   = option%nstate
@@ -409,6 +412,8 @@
       real(8) :: val
 
 
+      if (.not. option%output_Rij) return
+
       ! Setup
       !
       nstate   = option%nstate
@@ -418,26 +423,6 @@
       if (val < 0.999d0) then
         return
       end if
-
-      write(fname,'(a,".rhist")') trim(output%fhead)
-      call open_file(fname, io)
-
-      write(io,'("RIJ")')
-
-      do js = 1, nstate
-      do is = 1, nstate
-      do istep = 0, nt_range
-        val = f%R(istep, is, js)
-        if (val >= 0.999d0) then
-          write(io, '(i5, 2x, i5, 2x, i10, 2x, f20.10)') is, js, istep, val
-        end if
-      end do 
-      end do
-      end do 
-      write(io, '("END")')
-
-      close(io)
-
 
       write(fname, '(a,".krhist")') trim(output%fhead)
       if (is_gen) then

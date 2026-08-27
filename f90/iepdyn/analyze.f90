@@ -11,6 +11,8 @@ module mod_analyze
 
   ! Constants
   !
+  integer, parameter :: UseForAnyState    = -1
+  integer, parameter :: UseForInsideState = -2 
 
   ! Structures
   !
@@ -58,13 +60,17 @@ module mod_analyze
   end type s_infprop
 
   type :: s_inpcond
-    integer, allocatable :: unperturbed_ids(:)
-    integer, allocatable :: use_for_Rij(:)
-    integer, allocatable :: nfile_each_state(:)
-    integer, allocatable :: nfile_to_be_read(:)
-    integer, allocatable :: nlen_each_traj(:)
-    integer, allocatable :: ista(:)
-    integer, allocatable :: iend(:)
+    integer                             :: nfile
+    integer                             :: nkhist
+    integer                             :: nrhist
+    character(len=MaxChar), allocatable :: histfiles(:) 
+    integer,                allocatable :: unperturbed_ids(:)
+    integer,                allocatable :: use_for_Rij(:)
+    integer,                allocatable :: nfile_each_state(:)
+    integer,                allocatable :: nfile_to_be_read(:)
+    integer,                allocatable :: nlen_each_traj(:)
+    integer,                allocatable :: ista(:)
+    integer,                allocatable :: iend(:)
   end type s_inpcond
 
   ! subroutines
@@ -97,7 +103,12 @@ module mod_analyze
       type(s_infprop)  :: ip
 
       integer :: iseed
+      integer :: nf
+      logical :: is_gen 
 
+      ! Arrays
+      !
+      type(s_func), allocatable :: fj(:)
 
       ! Setup
       !
@@ -106,6 +117,9 @@ module mod_analyze
       call get_seed         (iseed)
       call initialize_random(iseed)
 
+      ! Merge file lists
+      !
+      call merge_filelist(input, ic)
 
       ! Read Unperturbed_ID file 
       ! (if use_perturbed_traj = .true.)
@@ -116,6 +130,21 @@ module mod_analyze
       !
       call calc_kernels(input, output, option, ic, boundary, f, fwrk, &
                         set_boundary = .true., verbose = .true.)
+
+      if (option%use_weight_for_Kijk) then
+        allocate(fj(option%nstate))
+        call calc_biased_kernels(input, output, option, ic, boundary, fj, fwrk, &
+                                 verbose = .false.)
+        call calc_weighted_kernels(option, boundary, fj, f, fwrk)
+        call calc_Mjk_from_Kijk(option, boundary, f)
+        call check_Kijk(option, boundary, f)
+
+        if (option%output_histogram) then
+          is_gen = .false.
+          call output_Kijk_hist(option, output, fwrk, is_gen)
+          call output_Rij_hist (option, output, f, is_gen)
+        end if
+      end if
 
       ! Write functions involved in the integral equations (IEs) as inputs
       !
@@ -159,6 +188,52 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
+    subroutine merge_filelist(input, ic) 
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_input),   intent(in)    :: input
+      type(s_inpcond), intent(inout) :: ic
+
+      integer :: nf
+
+
+      ic%nfile = 0 
+      if (input%nkhist == 0) then
+        ic%nfile = input%ncv
+      else
+        ic%nfile = input%nkhist
+      end if
+
+      if (input%nrhist > 0) ic%nfile = ic%nfile + input%nrhist
+      allocate(ic%histfiles(ic%nfile))
+      ic%histfiles = ''
+
+      nf = 0
+      if (input%nkhist == 0) then
+        nf = input%ncv
+        ic%histfiles(1:nf) = input%fcv(1:nf)
+        ic%nkhist          = nf 
+      else
+        write(iw,'("Merge_FileList> fkhist is specified in input_param")')
+        write(iw,'(">> fcv is replaced by fkhist")')
+        nf = input%nkhist
+        ic%histfiles(1:nf) = input%fkhist(1:nf)
+        ic%nkhist          = nf 
+      end if
+
+      ic%nrhist = 0
+      if (input%nrhist > 0) then
+        write(iw,'("Merge_FileList> frhist is specified in input_param")')
+        write(iw,'(">> file list is appended")')
+        ic%histfiles(nf + 1:nf + input%nrhist) = input%frhist(1:input%nrhist)
+        ic%nrhist                              = input%nrhist
+      end if
+
+    end subroutine merge_filelist
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
     subroutine setup_perturb(input, option, ic) 
 !-----------------------------------------------------------------------
       implicit none
@@ -176,12 +251,12 @@ module mod_analyze
       integer :: is, ifile 
 
 
-      if (.not. option%use_perturbed_traj) return
+      !if (.not. option%use_perturbed_traj) return
 
-      write(iw,*)
-      write(iw,'("Analyze> Read f_unperturbed_id file")')
-      write(iw,'("Note: unperturbed state info.&
-                & is used only if use_perturbed_traj = .true.")')
+      !write(iw,*)
+      !write(iw,'("Analyze> Read f_unperturbed_id file")')
+      !write(iw,'("Note: unperturbed state info.&
+      !          & is used only if use_perturbed_traj = .true.")')
 
       ! Setup
       !
@@ -191,10 +266,18 @@ module mod_analyze
       ! Get unperturbed state id for each file
       !
       allocate(ic%unperturbed_ids(nfile), ic%use_for_Rij(nfile))
-      call read_f_unperturbed_id(option, nfile, ic%unperturbed_ids, ic%use_for_Rij)
-      do ifile = 1, nfile
-        write(iw,'(3i10)') ifile, ic%unperturbed_ids(ifile), ic%use_for_Rij(ifile)
-      end do
+
+      if (option%unperturbed_id /= NotSpecified) then
+        ic%unperturbed_ids(:) = option%unperturbed_id
+        if (option%use_traj_for_Rij) then
+          ic%use_for_Rij(:) = + 1
+        end if
+      else
+        call read_f_unperturbed_id(option, nfile, ic%unperturbed_ids, ic%use_for_Rij)
+        do ifile = 1, nfile
+          write(iw,'(3i10)') ifile, ic%unperturbed_ids(ifile), ic%use_for_Rij(ifile)
+        end do
+      end if
       
       ! Get # of files for each unperturbed state
       !
@@ -753,6 +836,8 @@ module mod_analyze
 
       ! Read
       !
+      if (.not. option%is_funp_specified) return
+
       call open_file(option%f_unperturbed_id, io, stat = 'old')
       do ifile = 1, nfile
         read(io,*) unperturbed_ids(ifile), use_for_Rij(ifile) 
@@ -809,7 +894,7 @@ module mod_analyze
       ! Setup
       ! 
       ndim     = option%ndim * option%nmol 
-      nfile    = input%ncv
+      nfile    = ic%nfile !input%ncv
       nstate   = option%nstate
       nt_range = option%nt_range
 
@@ -852,7 +937,8 @@ module mod_analyze
 
           ! For sensitivity analysis
           !    
-          if (option%use_perturbed_traj .and. option%check_senserr) then
+          !if (option%use_perturbed_traj .and. option%check_senserr) then
+          if (option%is_funp_specified .and. option%check_senserr) then
             id = ic%unperturbed_ids(ifile)
             if (id > 0) then
               ncount_traj(id) = ncount_traj(id) + 1
@@ -864,7 +950,8 @@ module mod_analyze
 
           ! For block average or cumulative analysis
           !    
-          if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
+          !if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
+          if (option%is_funp_specified .and. (option%check_blockave .or. option%check_cumulative)) then
 
             if (option%conv_check_type == ConvCheckTypeNumber) then
               id = ic%unperturbed_ids(ifile)
@@ -921,11 +1008,15 @@ module mod_analyze
               iseg = iseg + 1
               call get_state(option, cv, state)
        
-              state%unperturbed_id = -1
+              state%unperturbed_id = UseForAnyState 
               state%use_for_Rij    = -1
               if (option%use_perturbed_traj) then
                 state%unperturbed_id = ic%unperturbed_ids(ifile)
                 state%use_for_Rij    = ic%use_for_Rij(ifile)
+
+                if (option%is_negper(state%unperturbed_id)) then
+                  state%unperturbed_id = UseForInsideState 
+                end if
               end if
        
               ! Update Connectivity
@@ -960,40 +1051,48 @@ module mod_analyze
 
         do ifile = 1, nfile
 
-          ! For sensitivity analysis
-          !    
-          if (option%use_perturbed_traj .and. option%check_senserr) then
-            id = ic%unperturbed_ids(ifile)
-            if (id > 0) then
-              ncount_traj(id) = ncount_traj(id) + 1
+          if (ifile <= ic%nkhist) then
 
-              if (ncount_traj(id) > ic%nfile_to_be_read(id)) then
-                cycle
-              end if
-            end if
-          end if
+            ! For sensitivity analysis
+            !    
+            !if (option%use_perturbed_traj .and. option%check_senserr) then
+            if (option%is_funp_specified .and. option%check_senserr) then
+              id = ic%unperturbed_ids(ifile)
+              if (id > 0) then
+                ncount_traj(id) = ncount_traj(id) + 1
 
-          ! For block average or cumulative analysis
-          !    
-          if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
-            id = ic%unperturbed_ids(ifile)
-            if (id > 0) then
-              ncount_traj(id) = ncount_traj(id) + 1
-              if (.not. option%is_errex(id)) then
-                if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                if (ncount_traj(id) > ic%nfile_to_be_read(id)) then
                   cycle
                 end if
               end if
             end if
-          end if
+
+            ! For block average or cumulative analysis
+            !    
+            !if (option%use_perturbed_traj .and. (option%check_blockave .or. option%check_cumulative)) then
+            if (option%is_funp_specified .and. (option%check_blockave .or. option%check_cumulative)) then
+              id = ic%unperturbed_ids(ifile)
+              if (id > 0) then
+                ncount_traj(id) = ncount_traj(id) + 1
+                if (.not. option%is_errex(id)) then
+                  if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                    cycle
+                  end if
+                end if
+              end if
+            end if
+
+          end if ! ifile <= nkhist 
 
           if (vb) then
-            write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
+            !write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(input%fcv(ifile))
+            write(iw,'("Analyze> Read CV file: ", 2x,a)') trim(ic%histfiles(ifile))
           end if
 
           iseg   = 0
           is_end = .false.
-          call open_file(input%fcv(ifile), io, stat = 'old')
+          !call open_file(input%fcv(ifile), io, stat = 'old')
+          call open_file(ic%histfiles(ifile), io, stat = 'old')
 
           call seek_line(io, 'KIJK', ierr)
           if (ierr == 0) call update_Kijk_from_hist(io, option, fwrk)
@@ -1004,6 +1103,13 @@ module mod_analyze
           close(io)
         end do
         call get_state_connectivity_from_h(option, fwrk%h, b)
+
+        if (vb .and. option%output_histogram) then
+          is_gen = .false.
+          call output_Kijk_hist(option, output, fwrk, is_gen)
+          call output_Rij_hist (option, output, f, is_gen)
+        end if
+
       end if
 
       sb = .true.
@@ -1072,6 +1178,256 @@ module mod_analyze
       if (vb) write(iw,'(">> Done")')
 
     end subroutine calc_kernels
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine calc_biased_kernels(input, output, option, ic, b, fj, fwrk, &
+                                     verbose)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_input),     intent(in)    :: input
+      type(s_output),    intent(in)    :: output
+      type(s_option),    intent(in)    :: option
+      type(s_inpcond),   intent(in)    :: ic
+      type(s_boundary),  intent(inout) :: b
+      type(s_func),      intent(inout) :: fj(:)
+      type(s_fwrk),      intent(inout) :: fwrk
+      logical, optional, intent(in)    :: verbose
+
+      ! I/O
+      !
+      integer                :: io
+      character(len=MaxChar) :: fname 
+
+      ! Local
+      !
+      character(len=MaxChar) :: line
+      integer                :: ndim, nstep, nfile, nstate
+      integer                :: nt_range, unp_id
+      integer                :: nboundary
+      logical                :: is_end
+      logical                :: sb, vb
+      logical                :: is_gen
+
+      type(s_cv)    :: cv
+      type(s_state) :: state
+
+      ! Dummy
+      !
+      integer :: ifile, istep, iseg, is, js, is1, is2, ib, id, idir, ierr
+      integer :: istate, id_traj, ilen
+
+      ! Arrays
+      !
+      integer,      allocatable :: ncount_traj(:)
+
+
+      ! Setup
+      ! 
+      ndim     = option%ndim * option%nmol 
+      nfile    = ic%nfile !input%ncv
+      nstate   = option%nstate
+      nt_range = option%nt_range
+
+      vb = .false.
+      if (present(verbose)) vb = verbose
+
+      ! Allocate some arrays in fj structure
+      !
+      do istate = 1, nstate
+        allocate(fj(istate)%R   (0:nt_range, nstate, nstate))
+        allocate(fj(istate)%Rint(0:nt_range, nstate, nstate))
+        allocate(fj(istate)%P0  (0:nt_range, nstate))
+        fj(istate)%R   = 0.0d0
+        fj(istate)%Rint = 0.0d0
+        fj(istate)%P0   = 0.0d0
+      end do
+      !end if
+
+      ! Allocate work space
+      !
+      if (.not. allocated(fwrk%h)) then
+        allocate(fwrk%h(nstate, nstate))
+        allocate(fwrk%K(0:nt_range, fwrk%nkmax))
+        allocate(fwrk%kmesh(nstate, nstate, nstate))
+        fwrk%nk    = 0
+        fwrk%K     = 0.0d0
+        fwrk%kmesh = 0
+      end if
+      fwrk%K = 0.0d0
+      fwrk%h = 0.0d0
+
+      if (.not. allocated(ncount_traj)) then
+        allocate(ncount_traj(nstate))
+      end if
+      ncount_traj = 0
+
+      do istate = 1, nstate
+        do ifile = 1, ic%nkhist 
+
+          id = ic%unperturbed_ids(ifile)
+          if (istate /= id) cycle
+
+          ! For sensitivity analysis
+          !    
+          if (option%check_senserr) then
+            if (id > 0) then
+              ncount_traj(id) = ncount_traj(id) + 1
+
+              if (ncount_traj(id) > ic%nfile_to_be_read(id)) then
+                cycle
+              end if
+            else
+              write(iw,'("Error. unperturbed_ids should be >0 if use_weight_for_Kijk = .true.")')
+              stop
+            end if
+          end if
+
+          ! For block average or cumulative analysis
+          !    
+          if (option%check_blockave .or. option%check_cumulative) then
+            if (id > 0) then
+              ncount_traj(id) = ncount_traj(id) + 1
+              if (.not. option%is_errex(id)) then
+                if (ncount_traj(id) < ic%ista(id) .or. ncount_traj(id) > ic%iend(id)) then
+                  cycle
+                end if
+              end if
+            else
+              write(iw,'("Error. unperturbed_ids should be >0 if use_weight_for_Kijk = .true.")')
+              stop
+            end if
+          end if
+
+          iseg   = 0
+          is_end = .false.
+          call open_file(ic%histfiles(ifile), io, stat = 'old')
+
+          call seek_line(io, 'KIJK', ierr)
+          if (ierr == 0) call update_Kijk_from_hist(io, option, fwrk)
+
+          close(io)
+        end do
+        call get_state_connectivity_from_h(option, fwrk%h, b)
+
+        ! Convert arrays
+        !
+        call convert_Kijk_arrays(option, b, fwrk, fj(istate))
+
+        ! Normalize K-function
+        ! 
+        call normalize_Kijk(option, b, fj(istate), verbose = vb)
+
+        if (option%use_smoothing) then
+          call smooth_RK(option, b, fj(istate))
+        end if
+
+        call check_Kijk(option, b, fj(istate))
+
+      end do
+
+    end subroutine calc_biased_kernels
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine calc_weighted_kernels(option, b, fj, f, fwrk)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option),    intent(in)    :: option
+      type(s_boundary),  intent(inout) :: b
+      type(s_func),      intent(inout) :: fj(:)
+      type(s_func),      intent(inout) :: f
+      type(s_fwrk),      intent(inout) :: fwrk
+
+      ! I/O
+      !
+
+      ! Local
+      !
+      integer                :: nstep, nstate
+      integer                :: nt_range
+      integer                :: nboundary
+      logical                :: is_end
+      logical                :: sb
+      logical                :: is_gen
+      real(8)                :: dt
+
+      ! Dummy
+      !
+      integer :: inflx, istep, iseg, ik, js1, js2, is1, is2, ib, jb
+      integer :: istate
+      real(8) :: wsum, sw, w
+
+      ! Arrays
+      !
+
+      ! Setup
+      ! 
+      nstate    = option%nstate
+      nt_range  = option%nt_range
+      dt        = option%dt_out
+      nboundary = b%nboundary 
+
+      fwrk%K = 0.0d0
+      f%K    = 0.0d0 
+      do ib = -nboundary, nboundary
+        if (ib == 0) cycle
+        is1             = b%b2p(1, ib)
+        is2             = b%b2p(2, ib)
+        do inflx = 1, b%n_influx_boundary(is1)
+          jb   = b%influx_boundary(inflx, is1)
+          js1  = b%b2p(1, jb)
+          js2  = b%b2p(2, jb)
+
+          wsum = 0.0d0
+          do istate = 1, nstate
+
+            sw   = fj(istate)%hit_count(jb) 
+            if (fj(istate)%hit_count(jb) > 0.1d0) then
+              sw = 1.0d0
+            else
+              sw = 0.0d0
+            end if 
+            w    = option%state_weight(istate) * sw
+            wsum = wsum + w 
+            f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+            !if (sum(fj(istate)%K(:, :, jb)) > 1.0d-5) then
+            !  wsum = wsum + option%state_weight(istate)
+            !  f%K(:, is2, jb) = f%K(:, is2, jb) &
+            !          + option%state_weight(istate) * fj(istate)%K(:, is2, jb)
+            !end if
+          end do
+          !f%K(:, is2, jb) = f%K(:, is2, jb) / sum(option%state_weight(:))
+
+          if (wsum < 1.0d-10) then 
+            f%K(:, is2, jb) = 0.0d0 
+          else
+            f%K(:, is2, jb) = f%K(:, is2, jb) / wsum
+          end if 
+         
+          ik = fwrk%kmesh(is2, is1, js1)
+          if (ik == 0) cycle
+
+          fwrk%K(:, ik) = f%K(:, is2, jb) * 100.0d0 * option%dt 
+        end do
+      end do
+
+      do ib = -nboundary, nboundary
+
+        if (ib == 0) cycle
+
+        is1             = b%b2p(1, ib)
+        is2             = b%b2p(2, ib)
+
+        if (sum(f%K(:, :, ib)*dt) > 1.0d-5) then
+          !fwrk%h(is2, is1) = sum(f%K(:, :, ib)*dt) * 100
+          fwrk%h(is2, is1) = 100.0d0
+        end if 
+      end do
+
+    end subroutine calc_weighted_kernels
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------

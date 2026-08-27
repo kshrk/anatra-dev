@@ -37,13 +37,18 @@ module mod_ctrl
   !
   type :: s_option
     logical :: use_perturbed_traj   = .false.
+    logical :: use_traj_for_Rij     = .false.
     logical :: use_reflection_state = .false.
     logical :: use_product_state    = .false.
     logical :: use_dissociate_state = .false.
     logical :: use_constant_Qij     = .false.
     logical :: use_rsto_Rij         = .true.
+    logical :: use_weight_for_Kijk  = .false.
     logical :: use_smoothing        = .false.
+    logical :: unperturbed_neighbor = .false.
     logical :: output_histogram     = .false.
+    logical :: output_Rij           = .true.
+    logical :: output_Kijk          = .true.
     logical :: extrapolate          = .false.
     logical :: calc_Pint            = .false.
     logical :: calc_Steady          = .false.
@@ -66,6 +71,8 @@ module mod_ctrl
     integer :: initial_state_ids      (MaxStates) = NotSpecified
     integer :: err_exception_state_ids(MaxStates) = NotSpecified
     integer :: ntraj_each_state       (MaxStates) = NotSpecified
+    integer :: neglect_unperturbed_ids(MaxStates) = NotSpecified
+    integer :: unperturbed_id                     = NotSpecified
     integer :: nkmax                              = 1000
     integer :: nblock                             = 5
     integer :: ncum                               = 10
@@ -95,19 +102,23 @@ module mod_ctrl
     integer              :: ndissoc      = 0
     integer              :: ninitial     = 0
     integer              :: nselect      = 0
+    integer              :: nnegper      = 0
 
     real(8)              :: dt_out
     integer              :: nstep        = 0
     integer              :: nt_sparse    = 0
     integer              :: nt_range     = 0
     integer              :: nt_extend    = 0
-    integer              :: nt_tcfout    = 0 
+    integer              :: nt_tcfout    = 0
+
+    logical              :: is_funp_specified = .false.
 
     logical, allocatable :: is_initial  (:)
     logical, allocatable :: is_product  (:)
     logical, allocatable :: is_reflect  (:)
     logical, allocatable :: is_dissoc   (:)
-    logical, allocatable :: is_errex    (:) 
+    logical, allocatable :: is_errex    (:)
+    logical, allocatable :: is_negper   (:) 
     real(8), allocatable :: state_def   (:, :, :)
     real(8), allocatable :: state_weight(:)
     real(8), allocatable :: state_weight_unnorm(:)
@@ -184,14 +195,19 @@ module mod_ctrl
       type(s_timegrid), intent(out) :: timegrid
 
       logical :: use_perturbed_traj   = .false.
+      logical :: use_traj_for_Rij     = .false.
       logical :: use_reflection_state = .false.
       logical :: use_product_state    = .false.
       logical :: use_dissociate_state = .false.
       logical :: use_constant_Qij     = .false.
       logical :: use_rsto_Rij         = .true.
+      logical :: use_weight_for_Kijk  = .false.
       logical :: use_smoothing        = .false.
+      logical :: unperturbed_neighbor = .false.
       logical :: output_histogram     = .false.
       logical :: extrapolate          = .false.
+      logical :: output_Rij           = .true.
+      logical :: output_Kijk          = .true.
       logical :: calc_Pint            = .false.
       logical :: calc_Steady          = .false.
       logical :: check_Kijk           = .false.
@@ -215,6 +231,8 @@ module mod_ctrl
       integer :: initial_state_ids      (MaxStates) = NotSpecified
       integer :: err_exception_state_ids(MaxStates) = NotSpecified
       integer :: ntraj_each_state       (MaxStates) = NotSpecified
+      integer :: neglect_unperturbed_ids(MaxStates) = NotSpecified
+      integer :: unperturbed_id                     = NotSpecified
       integer :: nkmax                              = 1000
       integer :: nblock                             = 5
       integer :: ncum                               = 10
@@ -229,7 +247,7 @@ module mod_ctrl
       ! Local
       !
       integer :: nreflect = 0, nproduct = 0, ndissoc = 0, ninitial = 0, nselect = 0
-      integer :: nerrex   = 0
+      integer :: nerrex   = 0, nnegper  = 0
 
       ! Dummy
       !
@@ -237,46 +255,53 @@ module mod_ctrl
       integer :: iopt, ierr
 
 
-      namelist /option_param/   &
-        use_perturbed_traj,     &
-        use_reflection_state,   &
-        use_product_state,      &
-        use_dissociate_state,   &
-        use_constant_Qij,       &
-        use_rsto_Rij,           &
-        use_smoothing,          &
-        output_histogram,       &
-        extrapolate,            &
-        check_Kijk,             &
-        check_senserr,          &
-        check_blockave,         &
-        check_cumulative,       &
-        calc_Pint,              &
-        calc_Steady,            &
-        input_type,             &
-        errex_type,             &
-        cumdirec,               &
-        conv_check_type,        &
-        f_unperturbed_id,       &
-        f_cQij,                 &
-        nmol,                   &
-        ndim,                   &
-        nstate,                 &
-        reflection_state_ids,   &
-        product_state_ids,      &
-        dissociate_state_ids,   &
-        initial_state_ids,      &
-        err_exception_state_ids,&
-        ntraj_each_state,       &
-        nkmax,                  &
-        nblock,                 &
-        ncum,                   &
-        smooth_order,           &
-        temperature,            &
-        dt,                     &
-        t_sparse,               &
-        t_range,                &
-        t_extend,               &
+      namelist /option_param/       &
+        use_perturbed_traj,         &
+        use_traj_for_Rij,           &
+        use_reflection_state,       &
+        use_product_state,          &
+        use_dissociate_state,       &
+        use_constant_Qij,           &
+        use_rsto_Rij,               &
+        use_weight_for_Kijk,        &
+        use_smoothing,              &
+        unperturbed_neighbor,       &
+        output_histogram,           &
+        output_Kijk,                &
+        output_Rij,                 &
+        extrapolate,                &
+        check_Kijk,                 &
+        check_senserr,              &
+        check_blockave,             &
+        check_cumulative,           &
+        calc_Pint,                  &
+        calc_Steady,                &
+        input_type,                 &
+        errex_type,                 &
+        cumdirec,                   &
+        conv_check_type,            &
+        f_unperturbed_id,           &
+        f_cQij,                     &
+        nmol,                       &
+        ndim,                       &
+        nstate,                     &
+        reflection_state_ids,       &
+        product_state_ids,          &
+        dissociate_state_ids,       &
+        initial_state_ids,          &
+        err_exception_state_ids,    &
+        ntraj_each_state,           &
+        neglect_unperturbed_ids,    &
+        unperturbed_id,             &
+        nkmax,                      &
+        nblock,                     &
+        ncum,                       &
+        smooth_order,               &
+        temperature,                &
+        dt,                         &
+        t_sparse,                   &
+        t_range,                    &
+        t_extend,                   &
         dt_tcfout
 
       rewind io 
@@ -292,8 +317,11 @@ module mod_ctrl
       write(iw,'("use_dissociate_state = ", a)')   get_tof(use_dissociate_state)
       write(iw,'("use_constant_Qij     = ", a)')   get_tof(use_constant_Qij)
       write(iw,'("use_rsto_Rij         = ", a)')   get_tof(use_rsto_Rij)
+      write(iw,'("use_weight_for_Kijk  = ", a)')   get_tof(use_weight_for_Kijk)
       write(iw,'("use_smoothing        = ", a)')   get_tof(use_smoothing)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
+      write(iw,'("output_Kijk          = ", a)')   get_tof(output_Kijk)
+      write(iw,'("output_Rij           = ", a)')   get_tof(output_Rij)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
       write(iw,'("check_blockave       = ", a)')   get_tof(check_blockave)
@@ -325,6 +353,10 @@ module mod_ctrl
         stop
       end if
 
+      option%is_funp_specified = .false.
+      if (trim(f_unperturbed_id) /= '') then
+        option%is_funp_specified = .true.
+      end if
 
       ! Reflection
       !
@@ -398,10 +430,29 @@ module mod_ctrl
       end do
 
       allocate(option%is_initial(nstate))
-
       option%is_initial = .false.
       do i = 1, ninitial 
         option%is_initial(initial_state_ids(i)) = .true. 
+      end do
+
+      ! Neglect Perturbation 
+      !
+      nnegper = 0
+      write(iw,*)
+      do i = 1, MaxStates
+        if (neglect_unperturbed_ids(i) /= NotSpecified) then
+          write(iw,'("neglect_unperturbed_ids  ", i0, " : ", i0)') i, neglect_unperturbed_ids(i)
+          nnegper = nnegper + 1
+        else
+          exit
+        end if
+      end do
+
+      allocate(option%is_negper(nstate))
+
+      option%is_negper = .false.
+      do i = 1, nnegper 
+        option%is_negper(neglect_unperturbed_ids(i)) = .true. 
       end do
 
 
@@ -433,52 +484,61 @@ module mod_ctrl
       end if
       option%conv_check_type = iopt
 
-      option%use_perturbed_traj   = use_perturbed_traj
-      option%use_reflection_state = use_reflection_state
-      option%use_product_state    = use_product_state
-      option%use_dissociate_state = use_dissociate_state
-      option%use_constant_Qij     = use_constant_Qij
-      option%use_rsto_Rij         = use_rsto_Rij
-      option%use_smoothing        = use_smoothing
-      option%output_histogram     = output_histogram
-      option%extrapolate          = extrapolate
-      option%check_Kijk           = check_Kijk
-      option%check_senserr        = check_senserr
-      option%check_blockave       = check_blockave
-      option%check_cumulative     = check_cumulative
-      option%calc_Pint            = calc_Pint
-      option%calc_Steady          = calc_Steady
+      option%use_perturbed_traj      = use_perturbed_traj
+      option%use_traj_for_Rij        = use_traj_for_Rij  ! works if unperturbed_id is specified
+      option%use_reflection_state    = use_reflection_state
+      option%use_product_state       = use_product_state
+      option%use_dissociate_state    = use_dissociate_state
+      option%use_constant_Qij        = use_constant_Qij
+      option%use_rsto_Rij            = use_rsto_Rij
+      option%use_weight_for_Kijk     = use_weight_for_Kijk
+      option%use_smoothing           = use_smoothing
+      option%unperturbed_neighbor    = unperturbed_neighbor
+      option%output_histogram        = output_histogram
+      option%output_Kijk             = output_Kijk
+      option%output_Rij              = output_Rij
+      option%extrapolate             = extrapolate
+      option%check_Kijk              = check_Kijk
+      option%check_senserr           = check_senserr
+      option%check_blockave          = check_blockave
+      option%check_cumulative        = check_cumulative
+      option%calc_Pint               = calc_Pint
+      option%calc_Steady             = calc_Steady
 
-      option%f_unperturbed_id     = f_unperturbed_id
-      option%f_cQij               = f_cQij
+      option%f_unperturbed_id        = f_unperturbed_id
+      option%f_cQij                  = f_cQij
 
-      option%nmol                 = nmol
-      option%ndim                 = ndim
-      option%nstate               = nstate
+      option%nmol                    = nmol
+      option%ndim                    = ndim
+      option%nstate                  = nstate
 
-      option%nreflect             = nreflect
-      option%reflection_state_ids = reflection_state_ids
+      option%nreflect                = nreflect
+      option%reflection_state_ids    = reflection_state_ids
 
-      option%nproduct             = nproduct
-      option%product_state_ids    = product_state_ids
+      option%nproduct                = nproduct
+      option%product_state_ids       = product_state_ids
 
-      option%ndissoc              = ndissoc
-      option%dissociate_state_ids = dissociate_state_ids
+      option%ndissoc                 = ndissoc
+      option%dissociate_state_ids    = dissociate_state_ids
 
-      option%ninitial             = ninitial
-      option%initial_state_ids    = initial_state_ids
+      option%ninitial                = ninitial
+      option%initial_state_ids       = initial_state_ids
 
-      option%nkmax                = nkmax
-      option%nblock               = nblock
-      option%ncum                 = ncum
-      option%smooth_order         = smooth_order
-      option%temperature          = temperature
-      option%dt                   = dt
-      option%t_sparse             = t_sparse
-      option%t_range              = t_range
-      option%t_extend             = t_extend
-      option%dt_tcfout            = dt_tcfout
-      option%ntraj_each_state     = ntraj_each_state
+      option%nnegper                 = nnegper
+      option%neglect_unperturbed_ids = neglect_unperturbed_ids
+
+      option%unperturbed_id          = unperturbed_id
+      option%nkmax                   = nkmax
+      option%nblock                  = nblock
+      option%ncum                    = ncum
+      option%smooth_order            = smooth_order
+      option%temperature             = temperature
+      option%dt                      = dt
+      option%t_sparse                = t_sparse
+      option%t_range                 = t_range
+      option%t_extend                = t_extend
+      option%dt_tcfout               = dt_tcfout
+      option%ntraj_each_state        = ntraj_each_state
 
       ! Error exception states (hidden options)
       ! is_errex(is) = .true.  ---> exclude state is for error estimation
@@ -592,12 +652,12 @@ module mod_ctrl
       if (check_cumulative) i = i + 1
 
       if (i == 1) then
-        if (.not. use_perturbed_traj) then
-          write(iw,'("Read_Ctrl_Option> Error.")')
-          write(iw,'("use_perturbed_traj should be turned on when &
-                     &check_senserr, check_blockave, and check_cumulative is true.")')
-          stop
-        end if
+        !if (.not. use_perturbed_traj) then
+        !  write(iw,'("Read_Ctrl_Option> Error.")')
+        !  write(iw,'("use_perturbed_traj should be turned on when &
+        !             &check_senserr, check_blockave, and check_cumulative is true.")')
+        !  stop
+        !end if
       else if (i > 1) then
          write(iw,'("Read_Ctrl_Option> Error.")')
          write(iw,'("check_blockave, check_senserr, and check_cumulative &
