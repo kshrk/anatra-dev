@@ -38,6 +38,7 @@ module mod_analyze
   end type s_boundary
 
   type :: s_func
+    integer              :: nstep_tot
     real(8), allocatable :: K(:, :, :)
     real(8), allocatable :: M(:, :)
     real(8), allocatable :: P0(:, :)
@@ -46,8 +47,9 @@ module mod_analyze
   end type s_func
 
   type :: s_fwrk
-    integer :: nkmax = 50000
-    integer :: nk    = 0
+    integer :: nkmax     = 50000
+    integer :: nk        = 0
+    integer :: nstep_tot = 0
     integer, allocatable :: kmesh(:, :, :)
     real(8), allocatable :: K(:, :)
     real(8), allocatable :: h(:, :)
@@ -919,9 +921,10 @@ module mod_analyze
         allocate(fwrk%h(nstate, nstate))
         allocate(fwrk%K(0:nt_range, fwrk%nkmax))
         allocate(fwrk%kmesh(nstate, nstate, nstate))
-        fwrk%nk    = 0
-        fwrk%K     = 0.0d0
-        fwrk%kmesh = 0
+        fwrk%nk        = 0
+        fwrk%K         = 0.0d0
+        fwrk%kmesh     = 0
+        fwrk%nstep_tot = 0
       end if
       fwrk%K = 0.0d0
       fwrk%h = 0.0d0
@@ -1393,13 +1396,19 @@ module mod_analyze
             w    = option%state_weight(istate) * sw
             wsum = wsum + w 
             f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
-            !if (sum(fj(istate)%K(:, :, jb)) > 1.0d-5) then
-            !  wsum = wsum + option%state_weight(istate)
-            !  f%K(:, is2, jb) = f%K(:, is2, jb) &
-            !          + option%state_weight(istate) * fj(istate)%K(:, is2, jb)
+
+            !if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then 
+            !  if (fj(istate)%nstep_tot > 0) then
+            !    sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
+            !  else 
+            !    sw = 0.0d0
+            !  end if
+
+            !  w               = sw * option%state_weight(istate)
+            !  wsum            = wsum + w
+            !  f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
             !end if
           end do
-          !f%K(:, is2, jb) = f%K(:, is2, jb) / sum(option%state_weight(:))
 
           if (wsum < 1.0d-10) then 
             f%K(:, is2, jb) = 0.0d0 
@@ -1410,7 +1419,8 @@ module mod_analyze
           ik = fwrk%kmesh(is2, is1, js1)
           if (ik == 0) cycle
 
-          fwrk%K(:, ik) = f%K(:, is2, jb) * 100.0d0 * option%dt 
+          fwrk%K(:, ik)  = f%K(:, is2, jb) * 100.0d0 * option%dt
+          fwrk%nstep_tot = 1
         end do
       end do
 

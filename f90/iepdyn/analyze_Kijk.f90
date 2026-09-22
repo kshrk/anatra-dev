@@ -32,6 +32,9 @@
       nt_sparse        = option%nt_sparse
       dt               = option%dt_out
 
+      !fwrk%nstep_tot   = fwrk%nstep_tot + floor(dble(nstep)/nt_sparse) * nt_sparse 
+      fwrk%nstep_tot   = fwrk%nstep_tot + nstep 
+
       do imol = 1, nmol
 
         ! Search reaction time
@@ -180,6 +183,9 @@
         if (trim(typ) == 'H') then
           read(line,*) typ, js, ks, val
           fwrk%h(js, ks) = fwrk%h(js, ks) + val
+        else if (trim(typ) == 'S') then
+          read(line,*) typ, istep
+          fwrk%nstep_tot = fwrk%nstep_tot + istep 
         else if (trim(typ) == 'K') then
           read(line,*) typ, is, js, ks, istep, val
           ik = fwrk%kmesh(is, js, ks)
@@ -237,6 +243,7 @@
       end if
       f%K         = 0.0d0
       f%hit_count = 0.0d0
+      f%nstep_tot = fwrk%nstep_tot 
 
       ! Convert K-arrays
       !
@@ -359,7 +366,8 @@
       integer :: is, js, is1, is2, ib, id, istep
 
 
-      if (.not. option%output_Kijk) return
+      if (.not. option%output_Kijk)  return
+      if (.not. option%output_KRtcf) return
 
       ! Setup
       !
@@ -567,6 +575,7 @@
       is_gen = .true.
 
       write(io,'("KIJK")')
+      write(io, '("S",2x,i0)') fwrk%nstep_tot
 
       do ks = 1, nstate
       do js = 1, nstate

@@ -264,7 +264,7 @@
         end do
 
         do is = 1, nstate
-          if (is /= js .and. weight > 1.0d-10) then
+          if (is /= js .and. weight > 1.0d-10 .and. state_sum > 1.0d-10) then
             f%R(:, is, js) = weight * f%R(:, is, js) / (state_sum * dt) 
           end if
         end do
@@ -342,7 +342,8 @@
       integer :: is, js, id, istep
 
 
-      if (.not. option%output_Rij) return
+      if (.not. option%output_Rij)   return
+      if (.not. option%output_KRtcf) return
 
       ! Setup
       !

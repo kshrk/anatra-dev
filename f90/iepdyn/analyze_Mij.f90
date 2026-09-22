@@ -112,6 +112,8 @@
       integer :: is, js, is1, is2, ib, id, istep
 
 
+      if (.not. option%output_KRtcf) return
+
       ! Setup
       !
       nstate    = option%nstate

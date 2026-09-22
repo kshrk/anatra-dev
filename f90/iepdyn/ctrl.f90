@@ -47,6 +47,7 @@ module mod_ctrl
     logical :: use_smoothing        = .false.
     logical :: unperturbed_neighbor = .false.
     logical :: output_histogram     = .false.
+    logical :: output_KRtcf         = .true.
     logical :: output_Rij           = .true.
     logical :: output_Kijk          = .true.
     logical :: extrapolate          = .false.
@@ -205,6 +206,7 @@ module mod_ctrl
       logical :: use_smoothing        = .false.
       logical :: unperturbed_neighbor = .false.
       logical :: output_histogram     = .false.
+      logical :: output_KRtcf         = .true.
       logical :: extrapolate          = .false.
       logical :: output_Rij           = .true.
       logical :: output_Kijk          = .true.
@@ -267,6 +269,7 @@ module mod_ctrl
         use_smoothing,              &
         unperturbed_neighbor,       &
         output_histogram,           &
+        output_KRtcf,               &
         output_Kijk,                &
         output_Rij,                 &
         extrapolate,                &
@@ -320,6 +323,7 @@ module mod_ctrl
       write(iw,'("use_weight_for_Kijk  = ", a)')   get_tof(use_weight_for_Kijk)
       write(iw,'("use_smoothing        = ", a)')   get_tof(use_smoothing)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
+      write(iw,'("output_KRtcf         = ", a)')   get_tof(output_KRtcf)
       write(iw,'("output_Kijk          = ", a)')   get_tof(output_Kijk)
       write(iw,'("output_Rij           = ", a)')   get_tof(output_Rij)
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
@@ -495,6 +499,7 @@ module mod_ctrl
       option%use_smoothing           = use_smoothing
       option%unperturbed_neighbor    = unperturbed_neighbor
       option%output_histogram        = output_histogram
+      option%output_KRtcf            = output_KRtcf
       option%output_Kijk             = output_Kijk
       option%output_Rij              = output_Rij
       option%extrapolate             = extrapolate
