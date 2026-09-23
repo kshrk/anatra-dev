@@ -79,7 +79,7 @@ module mod_analyze
       call open_file(fname_d, io_d)
 
       if (option%distance_type == DistanceTypeMINIMUM) then
-        write(fname_d,'(a,".dis_closest")') trim(output%fhead)
+        write(fname_cd,'(a,".dis_closest")') trim(output%fhead)
         call open_file(fname_cd, io_cd)
       end if
 
@@ -199,6 +199,7 @@ module mod_analyze
         end do
 
         istep_tot = istep_tot - 1
+        call close_trajfile(trajtype, io_t, dcd, xtc, nc)
 
       end do
 
