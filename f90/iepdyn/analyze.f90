@@ -88,7 +88,7 @@ module mod_analyze
       type(s_input),       intent(in)    :: input
       type(s_extra_input), intent(in)    :: einput
       type(s_output),      intent(in)    :: output
-      type(s_option),      intent(in)    :: option
+      type(s_option),      intent(inout)    :: option
       type(s_timegrid),    intent(in)    :: timegrid 
 
       ! I/O
@@ -105,8 +105,12 @@ module mod_analyze
       type(s_infprop)  :: ip
 
       integer :: iseed
-      integer :: nf
+      integer :: nf, niter
       logical :: is_gen 
+
+      ! Dummy
+      !
+      integer :: iter
 
       ! Arrays
       !
@@ -115,6 +119,7 @@ module mod_analyze
       ! Setup
       !
       fwrk%nkmax = option%nkmax
+      niter      = option%niter_for_weight
 
       call get_seed         (iseed)
       call initialize_random(iseed)
@@ -135,17 +140,37 @@ module mod_analyze
 
       if (option%use_weight_for_Kijk) then
         allocate(fj(option%nstate))
-        call calc_biased_kernels(input, output, option, ic, boundary, fj, fwrk, &
-                                 verbose = .false.)
+        call calc_biased_kernels  (input, output, option, ic, boundary, fj, fwrk, &
+                                   verbose = .false.)
+
+        do iter = 1, niter
+          write(iw,*)
+          write(iw,'("Iteration for determining weights: ", i0)') iter 
+          write(iw,*)
+          call calc_weighted_kernels(option, boundary, fj, f, fwrk)
+          call calc_Mjk_from_Kijk   (option, boundary, f)
+          call check_Kijk           (option, boundary, f)
+          call setup_boundary_cond  (output, option, boundary, f)
+          call reacdyn_pint(output, option, boundary, f, ip, write_steady = .false.)
+          call update_weight        (option, ip)
+        end do
+
+        ! Re-calculate weighted kernels to remove boundary cond.
+        !
         call calc_weighted_kernels(option, boundary, fj, f, fwrk)
-        call calc_Mjk_from_Kijk(option, boundary, f)
-        call check_Kijk(option, boundary, f)
+        call calc_Mjk_from_Kijk   (option, boundary, f)
+        call check_Kijk           (option, boundary, f)
 
         if (option%output_histogram) then
           is_gen = .false.
           call output_Kijk_hist(option, output, fwrk, is_gen)
           call output_Rij_hist (option, output, f, is_gen)
         end if
+      end if
+
+      if (option%nalias > 0) then
+        ! Note: After calling a following subroutine, nstate will be changed to nstate + nalias
+        call add_aliased_states(option, boundary, f, fwrk) 
       end if
 
       ! Write functions involved in the integral equations (IEs) as inputs
@@ -1242,9 +1267,10 @@ module mod_analyze
         allocate(fj(istate)%R   (0:nt_range, nstate, nstate))
         allocate(fj(istate)%Rint(0:nt_range, nstate, nstate))
         allocate(fj(istate)%P0  (0:nt_range, nstate))
-        fj(istate)%R   = 0.0d0
-        fj(istate)%Rint = 0.0d0
-        fj(istate)%P0   = 0.0d0
+        fj(istate)%R         = 0.0d0
+        fj(istate)%Rint      = 0.0d0
+        fj(istate)%P0        = 0.0d0
+        fj(istate)%nstep_tot = 0
       end do
       !end if
 
@@ -1258,8 +1284,9 @@ module mod_analyze
         fwrk%K     = 0.0d0
         fwrk%kmesh = 0
       end if
-      fwrk%K = 0.0d0
-      fwrk%h = 0.0d0
+      fwrk%K         = 0.0d0
+      fwrk%h         = 0.0d0
+      fwrk%nstep_tot = 0
 
       if (.not. allocated(ncount_traj)) then
         allocate(ncount_traj(nstate))
@@ -1387,27 +1414,34 @@ module mod_analyze
           wsum = 0.0d0
           do istate = 1, nstate
 
-            sw   = fj(istate)%hit_count(jb) 
-            if (fj(istate)%hit_count(jb) > 0.1d0) then
-              sw = 1.0d0
-            else
-              sw = 0.0d0
-            end if 
-            w    = option%state_weight(istate) * sw
-            wsum = wsum + w 
-            f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+            if (option%weight_type == 0) then
 
-            !if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then 
-            !  if (fj(istate)%nstep_tot > 0) then
-            !    sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
-            !  else 
-            !    sw = 0.0d0
-            !  end if
+              sw   = fj(istate)%hit_count(jb) 
+              if (fj(istate)%hit_count(jb) > 0.1d0) then
+                sw = 1.0d0
+              else
+                sw = 0.0d0
+              end if 
+              w    = option%state_weight(istate) * sw
+              wsum = wsum + w 
+              f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
 
-            !  w               = sw * option%state_weight(istate)
-            !  wsum            = wsum + w
-            !  f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
-            !end if
+            else if (option%weight_type == 1) then
+
+              if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then 
+                if (fj(istate)%nstep_tot > 0) then
+                  sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
+                else 
+                  sw = 0.0d0
+                end if
+
+                w               = sw * option%state_weight(istate)
+                wsum            = wsum + w
+                f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+              end if
+
+            end if
+
           end do
 
           if (wsum < 1.0d-10) then 
@@ -1596,7 +1630,9 @@ module mod_analyze
       !
       nstate = option%nstate
 
-      allocate(boundary%p2b(nstate, nstate))
+      if (.not. allocated(boundary%p2b)) then
+        allocate(boundary%p2b(nstate, nstate))
+      end if
 
       boundary%p2b = 0
       nboundary    = 0
@@ -1612,7 +1648,9 @@ module mod_analyze
 
       boundary%nboundary = nboundary
 
-      allocate(boundary%b2p(2, -nboundary:nboundary))
+      if (.not. allocated(boundary%b2p)) then
+        allocate(boundary%b2p(2, -nboundary:nboundary))
+      end if
 
       nboundary    = 0
       boundary%b2p = 0
@@ -1632,8 +1670,10 @@ module mod_analyze
       !
       nboundary = boundary%nboundary
 
-      allocate(boundary%n_influx_boundary(nstate))
-      allocate(boundary%influx_boundary(2*nboundary, nstate))
+      if (.not. allocated(boundary%n_influx_boundary)) then
+        allocate(boundary%n_influx_boundary(nstate))
+        allocate(boundary%influx_boundary(2*nboundary, nstate))
+      end if
 
       do is = 1, nstate
         ic = 0
@@ -1655,6 +1695,7 @@ module mod_analyze
     include 'analyze_P0.f90'
     include 'analyze_Kijk.f90'
     include 'analyze_Mij.f90'
+    include 'analyze_alias.f90'
     include 'analyze_bc.f90'
     include 'analyze_smooth.f90'
     include 'analyze_reacdyn.f90'

@@ -31,7 +31,12 @@ module mod_ctrl
   integer,      parameter, public :: ConvCheckTypeNumber = 1 
   integer,      parameter, public :: ConvCheckTypeLength = 2
   character(*), parameter, public :: ConvCheckTypes(2)   = (/'NUMBER', &
-                                                             'LENGTH'/) 
+                                                             'LENGTH'/)
+
+  integer,      parameter, public :: InitTypeP = 1 
+  integer,      parameter, public :: InitTypeQ = 2
+  character(*), parameter, public :: InitTypes(2) = (/'P', &
+                                                      'Q'/) 
 
   ! structures
   !
@@ -62,6 +67,8 @@ module mod_ctrl
     integer :: errex_type           = ErrexTypeExclude 
     integer :: cumdirec             = CumDirecIncrease
     integer :: conv_check_type      = ConvCheckTypeNumber
+    integer :: weight_type          = 0 ! 0: only w, 1: w and s (Temporary)
+    integer :: init_type            = InitTypeP
 
     integer :: nmol                               = NotSpecified 
     integer :: ndim                               = NotSpecified 
@@ -73,11 +80,13 @@ module mod_ctrl
     integer :: err_exception_state_ids(MaxStates) = NotSpecified
     integer :: ntraj_each_state       (MaxStates) = NotSpecified
     integer :: neglect_unperturbed_ids(MaxStates) = NotSpecified
+    integer :: alias_state_ids        (MaxStates) = NotSpecified
     integer :: unperturbed_id                     = NotSpecified
     integer :: nkmax                              = 1000
     integer :: nblock                             = 5
     integer :: ncum                               = 10
     integer :: smooth_order                       = 5
+    integer :: niter_for_weight                   = 10 
 
     ! File names 
     !
@@ -104,6 +113,7 @@ module mod_ctrl
     integer              :: ninitial     = 0
     integer              :: nselect      = 0
     integer              :: nnegper      = 0
+    integer              :: nalias       = 0
 
     real(8)              :: dt_out
     integer              :: nstep        = 0
@@ -179,6 +189,7 @@ module mod_ctrl
       call show_output      (output)
       call read_ctrl_option (io, option, timegrid)
       call read_ctrl_state  (io, option)
+      !call read_ctrl_Qinit  (io, option)
       close(io)
 
     end subroutine read_ctrl
@@ -221,8 +232,10 @@ module mod_ctrl
       character(len=MaxChar) :: errex_type       = 'EXCLUDE'
       character(len=MaxChar) :: cumdirec         = 'INCREASE'
       character(len=MaxChar) :: conv_check_type  = 'NUMBER'
+      character(len=MaxChar) :: init_type        = 'P'
       character(len=MaxChar) :: f_unperturbed_id = ''
-      character(len=MaxChar) :: f_cQij           = '' 
+      character(len=MaxChar) :: f_cQij           = ''
+      integer                :: weight_type      = 0
       
       integer :: nmol                               = NotSpecified
       integer :: ndim                               = NotSpecified
@@ -234,11 +247,13 @@ module mod_ctrl
       integer :: err_exception_state_ids(MaxStates) = NotSpecified
       integer :: ntraj_each_state       (MaxStates) = NotSpecified
       integer :: neglect_unperturbed_ids(MaxStates) = NotSpecified
+      integer :: alias_state_ids        (MaxStates) = NotSpecified
       integer :: unperturbed_id                     = NotSpecified
       integer :: nkmax                              = 1000
       integer :: nblock                             = 5
       integer :: ncum                               = 10
       integer :: smooth_order                       = 5
+      integer :: niter_for_weight                   = 10 
       real(8) :: temperature                        = 300.0d0
       real(8) :: dt
       real(8) :: t_sparse
@@ -249,7 +264,7 @@ module mod_ctrl
       ! Local
       !
       integer :: nreflect = 0, nproduct = 0, ndissoc = 0, ninitial = 0, nselect = 0
-      integer :: nerrex   = 0, nnegper  = 0
+      integer :: nerrex   = 0, nnegper  = 0, nalias  = 0
 
       ! Dummy
       !
@@ -283,6 +298,8 @@ module mod_ctrl
         errex_type,                 &
         cumdirec,                   &
         conv_check_type,            &
+        init_type,                  &
+        weight_type,                &
         f_unperturbed_id,           &
         f_cQij,                     &
         nmol,                       &
@@ -295,11 +312,13 @@ module mod_ctrl
         err_exception_state_ids,    &
         ntraj_each_state,           &
         neglect_unperturbed_ids,    &
+        alias_state_ids,            &
         unperturbed_id,             &
         nkmax,                      &
         nblock,                     &
         ncum,                       &
         smooth_order,               &
+        niter_for_weight,           &
         temperature,                &
         dt,                         &
         t_sparse,                   &
@@ -340,7 +359,8 @@ module mod_ctrl
       write(iw,'("nstate               = ", i0)')     nstate
       write(iw,'("temperature          = ", f20.10)') temperature
       write(iw,'("nblock               = ", i0)')     nblock
-      write(iw,'("smooth_order         = ", i0)')     smooth_order 
+      write(iw,'("smooth_order         = ", i0)')     smooth_order
+      write(iw,'("niter_for_weight     = ", i0)')     niter_for_weight 
 
       write(iw,'("dt                   = ", f20.10)') dt
       write(iw,'("t_sparse             = ", f20.10)') t_sparse
@@ -362,9 +382,20 @@ module mod_ctrl
         option%is_funp_specified = .true.
       end if
 
+      ! Alias states
+      !
+      nalias = 0
+      write(iw,*)
+      do i = 1, MaxStates
+        if (alias_state_ids(i) /= NotSpecified) then
+          write(iw,'("alias_state_ids  ", i0, " : ", i0)') i + nstate, alias_state_ids(i)
+          nalias = nalias + 1
+        end if
+      end do
+
       ! Reflection
       !
-      allocate(option%is_reflect(nstate))
+      allocate(option%is_reflect(nstate + nalias))
       option%is_reflect = .false.
 
       if (use_reflection_state) then
@@ -384,7 +415,7 @@ module mod_ctrl
 
       ! Product
       !
-      allocate(option%is_product(nstate))
+      allocate(option%is_product(nstate + nalias))
       option%is_product = .false.
 
       if (use_product_state) then
@@ -403,7 +434,7 @@ module mod_ctrl
 
       ! Dissociate
       !
-      allocate(option%is_dissoc(nstate))
+      allocate(option%is_dissoc(nstate + nalias))
       option%is_dissoc = .false.
 
       if (use_dissociate_state) then
@@ -433,7 +464,7 @@ module mod_ctrl
         end if
       end do
 
-      allocate(option%is_initial(nstate))
+      allocate(option%is_initial(nstate + nalias))
       option%is_initial = .false.
       do i = 1, ninitial 
         option%is_initial(initial_state_ids(i)) = .true. 
@@ -452,14 +483,19 @@ module mod_ctrl
         end if
       end do
 
-      allocate(option%is_negper(nstate))
-
+      allocate(option%is_negper(nstate + nalias))
       option%is_negper = .false.
       do i = 1, nnegper 
         option%is_negper(neglect_unperturbed_ids(i)) = .true. 
       end do
 
-
+      iopt = get_opt(init_type, InitTypes, ierr)
+      if (ierr /= 0) then
+        write(iw,'("Read_Ctrl_Option> Error.")')
+        write(iw,'("init_type = ",a," is not available.")') trim(init_type)
+      end if
+      option%init_type = iopt
+      
       iopt = get_opt(input_type, InputTypes, ierr)
       if (ierr /= 0) then
         write(iw,'("Read_Ctrl_Option> Error.")')
@@ -509,6 +545,7 @@ module mod_ctrl
       option%check_cumulative        = check_cumulative
       option%calc_Pint               = calc_Pint
       option%calc_Steady             = calc_Steady
+      option%weight_type             = weight_type
 
       option%f_unperturbed_id        = f_unperturbed_id
       option%f_cQij                  = f_cQij
@@ -532,11 +569,15 @@ module mod_ctrl
       option%nnegper                 = nnegper
       option%neglect_unperturbed_ids = neglect_unperturbed_ids
 
+      option%nalias                  = nalias
+      option%alias_state_ids         = alias_state_ids
+
       option%unperturbed_id          = unperturbed_id
       option%nkmax                   = nkmax
       option%nblock                  = nblock
       option%ncum                    = ncum
       option%smooth_order            = smooth_order
+      option%niter_for_weight        = niter_for_weight
       option%temperature             = temperature
       option%dt                      = dt
       option%t_sparse                = t_sparse

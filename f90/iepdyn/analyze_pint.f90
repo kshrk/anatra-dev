@@ -237,21 +237,21 @@
           stop
         end if
 
-        ! << DEBUG
-        write(iw,*)
-        write(iw,'("[ Eigenvalues ]")')
-        do iu = 1, nbt
-          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
-        end do
-        write(iw,*)
-        write(iw,'("[ Eigenvector corresponding to steady state]")')
-        iu = maxloc(wr(:), dim = 1)
-
-        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
-        do ju = 1, nbt
-          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
-        end do 
-        ! >> DEBUG
+!        ! << DEBUG
+!        write(iw,*)
+!        write(iw,'("[ Eigenvalues ]")')
+!        do iu = 1, nbt
+!          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
+!        end do
+!        write(iw,*)
+!        write(iw,'("[ Eigenvector corresponding to steady state]")')
+!        iu = maxloc(wr(:), dim = 1)
+!
+!        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
+!        do ju = 1, nbt
+!          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
+!        end do 
+!        ! >> DEBUG
 
         iu = maxloc(wr(:), dim = 1)
         Qinf(:) = vr(:, iu)
@@ -328,4 +328,39 @@
       !
       
     end subroutine reacdyn_pint
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine update_weight(option, ip)
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option),  intent(inout) :: option
+      type(s_infprop), intent(inout) :: ip
+
+      ! Local
+      !
+      integer :: nstate
+      real(8) :: wsum
+
+      ! Dummy
+      !
+      integer :: is
+
+
+      ! Setup
+      !
+      nstate = option%nstate
+
+      ! Update 
+      !
+      wsum                   = sum(ip%prob(:))
+      option%state_weight(:) = ip%prob(:) / wsum
+
+      write(iw,'("[ updated weights ]")')
+      do is = 1, nstate
+        write(iw,'(i5,2x,f20.10)') is, option%state_weight(is)
+      end do
+
+    end subroutine update_weight
 !-----------------------------------------------------------------------

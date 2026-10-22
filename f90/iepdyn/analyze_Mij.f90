@@ -44,6 +44,11 @@
       !
       if (.not. allocated(ksum)) then
         allocate(ksum(nstate, -nboundary:nboundary))
+      else
+        if (nstate > size(ksum, 1)) then
+          deallocate(ksum)
+          allocate(ksum(nstate, -nboundary:nboundary))
+        end if 
       end if
       ksum = 0.0d0
 
