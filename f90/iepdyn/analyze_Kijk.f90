@@ -9,10 +9,11 @@
 
       ! Local
       !
-      integer :: nmol, nstep, nt_range, nt_sparse
+      integer :: nmol, nstate, nstep, nt_range, nt_sparse
       integer :: unp_id
       real(8) :: dt
       logical :: is_final, is_prod, is_dissoc
+      integer :: n_visit_boundaries
 
       ! Dummy 
       !
@@ -22,30 +23,49 @@
       integer :: ista, iend, ireac
       integer :: iprod, idissoc
 
+      ! Arrays
+      !
+      integer, allocatable :: states_visited(:)
+
 
       ! Setup
       !
       nmol             = option%nmol
+      nstate           = option%nstate
       nstep            = state%nstep
       unp_id           = state%unperturbed_id
       nt_range         = option%nt_range
       nt_sparse        = option%nt_sparse
       dt               = option%dt_out
 
+      ! Allocate 
+      !
+      if (.not. allocated(states_visited)) then
+        allocate(states_visited(nstate))
+      end if
+
       !fwrk%nstep_tot   = fwrk%nstep_tot + floor(dble(nstep)/nt_sparse) * nt_sparse 
-      fwrk%nstep_tot   = fwrk%nstep_tot + nstep 
+      !fwrk%nstep_tot   = fwrk%nstep_tot + nstep 
 
       do imol = 1, nmol
 
+        ! Initialize
+        !
+        states_visited = 0 
+
         ! Search reaction time
         !
-        ks = state%data(1, imol)
-        js = ks
+        ks                 = state%data(1, imol)
+        js                 = ks
+        states_visited(ks) = 1
 
         ireac    = 0
-        is_final = .false. 
+        is_final = .false.
+
         do istep = nt_sparse + 1, nstep, nt_sparse
-          is = state%data(istep, imol)
+
+          is                 = state%data(istep, imol)
+          states_visited(is) = 1
 
           ! Detect Crossing 
           !
@@ -100,10 +120,25 @@
 
               end if
 
+              ! Judge whether reaching final record 
+              !
               if (istep == nstep .or. istep + nt_sparse > nstep) then
                 is_final = .true.
               end if
 
+              ! Judge whether # of visiting different boundaries exceeds max_visit_boundaries
+              !
+              if (sum(states_visited) - 1 >= option%max_visit_boundaries) then
+                is_final = .true.
+                ls   = ks
+                ks   = js
+                js   = is
+                ista = istep - nt_sparse
+                exit
+              end if
+
+              ! Crossing is counted if remaining records exist 
+              !
               if (.not. is_final) then
                 if (unp_id == is .or. unp_id <= UseForAnyState &
                   .or. is_unp_neighbor(option, js, unp_id)) then
@@ -114,7 +149,7 @@
               ls   = ks
               ks   = js
               js   = is
-              ista = istep - nt_sparse 
+              ista = istep - nt_sparse
 
             end if
 
@@ -123,25 +158,16 @@
 
         if (ireac == 0) cycle
 
-!        if (option%use_product_state) then
-!          is_prod = .false. 
-!          do iprod = 1, option%nproduct
-!            if (js == option%product_state_ids(iprod)) then
-!              is_prod = .true.
-!              exit 
-!            end if
-!          end do
-!          if (is_prod) cycle
-!        end if
+        fwrk%nstep_tot = fwrk%nstep_tot + ista
 
-         ! Eliminate incomplete events
-         !
-         if (.not. is_final .and. .not. option%is_dissoc(js)) then
-           if (unp_id == js .or. unp_id <= UseForAnyState &
-             .or. is_unp_neighbor(option, ks, unp_id)) then
-             fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
-           end if 
-         end if
+        ! Eliminate incomplete events
+        !
+        if (.not. is_final .and. .not. option%is_dissoc(js)) then
+          if (unp_id == js .or. unp_id <= UseForAnyState &
+            .or. is_unp_neighbor(option, ks, unp_id)) then
+            fwrk%h(js, ks) = fwrk%h(js, ks) - 1.0d0
+          end if 
+        end if
 
       end do
 
@@ -258,7 +284,7 @@
           js1  = boundary%b2p(1, jb)
           js2  = boundary%b2p(2, jb)
           ik   = fwrk%kmesh(is2, is1, js1)
-          if (ik == 0) cycle 
+          if (ik == 0) cycle
           f%K(:, is2, jb) = fwrk%K(:, ik)
         end do 
       end do
@@ -541,6 +567,7 @@
 
       do ks = 1, nstate
       do js = 1, nstate
+        if (option%calc_Kijk_specific_init .and. .not. option%is_Kijk_init(ks)) cycle
         val = fwrk%h(js, ks)
         if (val >= 0.999d0) then
           write(io, '("H", 2x, i5, 2x, i5, 2x, f20.10)') js, ks, val 
@@ -551,6 +578,7 @@
       do ks = 1, nstate
       do js = 1, nstate
       do is = 1, nstate
+        if (option%calc_Kijk_specific_init .and. .not. option%is_Kijk_init(ks)) cycle
         ik = fwrk%kmesh(is, js, ks)
         if (ik == 0) cycle
         do istep = 0, nt_range
@@ -579,6 +607,7 @@
 
       do ks = 1, nstate
       do js = 1, nstate
+        if (option%calc_Kijk_specific_init .and. .not. option%is_Kijk_init(ks)) cycle
         val = fwrk%h(js, ks)
         if (val >= 0.999d0) then
           write(io, '("H", 2x, i5, 2x, i5, 2x, f20.10)') js, ks, val 
@@ -589,6 +618,7 @@
       do ks = 1, nstate
       do js = 1, nstate
       do is = 1, nstate
+        if (option%calc_Kijk_specific_init .and. .not. option%is_Kijk_init(ks)) cycle
         ik = fwrk%kmesh(is, js, ks)
         if (ik == 0) cycle
         do istep = 0, nt_range

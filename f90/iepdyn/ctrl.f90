@@ -41,27 +41,29 @@ module mod_ctrl
   ! structures
   !
   type :: s_option
-    logical :: use_perturbed_traj   = .false.
-    logical :: use_traj_for_Rij     = .false.
-    logical :: use_reflection_state = .false.
-    logical :: use_product_state    = .false.
-    logical :: use_dissociate_state = .false.
-    logical :: use_constant_Qij     = .false.
-    logical :: use_rsto_Rij         = .true.
-    logical :: use_weight_for_Kijk  = .false.
-    logical :: use_smoothing        = .false.
-    logical :: unperturbed_neighbor = .false.
-    logical :: output_histogram     = .false.
-    logical :: output_KRtcf         = .true.
-    logical :: output_Rij           = .true.
-    logical :: output_Kijk          = .true.
-    logical :: extrapolate          = .false.
-    logical :: calc_Pint            = .false.
-    logical :: calc_Steady          = .false.
-    logical :: check_Kijk           = .false.
-    logical :: check_senserr        = .false.
-    logical :: check_blockave       = .false.
-    logical :: check_cumulative     = .false.
+    logical :: use_perturbed_traj      = .false.
+    logical :: use_traj_for_Rij        = .false.
+    logical :: use_reflection_state    = .false.
+    logical :: use_product_state       = .false.
+    logical :: use_dissociate_state    = .false.
+    logical :: use_constant_Qij        = .false.
+    logical :: use_rsto_Rij            = .true.
+    logical :: use_weight_for_Kijk     = .false.
+    logical :: use_smoothing           = .false.
+    logical :: unperturbed_neighbor    = .false.
+    logical :: output_histogram        = .false.
+    logical :: output_KRtcf            = .true.
+    logical :: output_Rij              = .true.
+    logical :: output_Kijk             = .true.
+    logical :: extrapolate             = .false.
+    logical :: calc_Pint               = .false.
+    logical :: calc_Steady             = .false.
+    logical :: check_Kijk              = .false.
+    logical :: check_senserr           = .false.
+    logical :: check_blockave          = .false.
+    logical :: check_cumulative        = .false.
+    logical :: calc_Kijk_specific_init = .false.
+    logical :: update_weight           = .true.
 
     integer :: input_type           = InputTypeTimeSeries
     integer :: errex_type           = ErrexTypeExclude 
@@ -82,11 +84,13 @@ module mod_ctrl
     integer :: neglect_unperturbed_ids(MaxStates) = NotSpecified
     integer :: alias_state_ids        (MaxStates) = NotSpecified
     integer :: unperturbed_id                     = NotSpecified
+    integer :: Kijk_init_ids          (MaxStates) = NotSpecified  
     integer :: nkmax                              = 1000
     integer :: nblock                             = 5
     integer :: ncum                               = 10
     integer :: smooth_order                       = 5
-    integer :: niter_for_weight                   = 10 
+    integer :: niter_for_weight                   = 10
+    integer :: max_visit_boundaries               = 100000000
 
     ! File names 
     !
@@ -114,6 +118,7 @@ module mod_ctrl
     integer              :: nselect      = 0
     integer              :: nnegper      = 0
     integer              :: nalias       = 0
+    integer              :: nKijk_init   = 0
 
     real(8)              :: dt_out
     integer              :: nstep        = 0
@@ -130,6 +135,7 @@ module mod_ctrl
     logical, allocatable :: is_dissoc   (:)
     logical, allocatable :: is_errex    (:)
     logical, allocatable :: is_negper   (:) 
+    logical, allocatable :: is_Kijk_init(:)
     real(8), allocatable :: state_def   (:, :, :)
     real(8), allocatable :: state_weight(:)
     real(8), allocatable :: state_weight_unnorm(:)
@@ -206,27 +212,29 @@ module mod_ctrl
       type(s_option),   intent(out) :: option
       type(s_timegrid), intent(out) :: timegrid
 
-      logical :: use_perturbed_traj   = .false.
-      logical :: use_traj_for_Rij     = .false.
-      logical :: use_reflection_state = .false.
-      logical :: use_product_state    = .false.
-      logical :: use_dissociate_state = .false.
-      logical :: use_constant_Qij     = .false.
-      logical :: use_rsto_Rij         = .true.
-      logical :: use_weight_for_Kijk  = .false.
-      logical :: use_smoothing        = .false.
-      logical :: unperturbed_neighbor = .false.
-      logical :: output_histogram     = .false.
-      logical :: output_KRtcf         = .true.
-      logical :: extrapolate          = .false.
-      logical :: output_Rij           = .true.
-      logical :: output_Kijk          = .true.
-      logical :: calc_Pint            = .false.
-      logical :: calc_Steady          = .false.
-      logical :: check_Kijk           = .false.
-      logical :: check_senserr        = .false.
-      logical :: check_blockave       = .false.
-      logical :: check_cumulative     = .false.
+      logical :: use_perturbed_traj      = .false.
+      logical :: use_traj_for_Rij        = .false.
+      logical :: use_reflection_state    = .false.
+      logical :: use_product_state       = .false.
+      logical :: use_dissociate_state    = .false.
+      logical :: use_constant_Qij        = .false.
+      logical :: use_rsto_Rij            = .true.
+      logical :: use_weight_for_Kijk     = .false.
+      logical :: use_smoothing           = .false.
+      logical :: unperturbed_neighbor    = .false.
+      logical :: output_histogram        = .false.
+      logical :: output_KRtcf            = .true.
+      logical :: extrapolate             = .false.
+      logical :: output_Rij              = .true.
+      logical :: output_Kijk             = .true.
+      logical :: calc_Pint               = .false.
+      logical :: calc_Steady             = .false.
+      logical :: check_Kijk              = .false.
+      logical :: check_senserr           = .false.
+      logical :: check_blockave          = .false.
+      logical :: check_cumulative        = .false.
+      logical :: calc_Kijk_specific_init = .false.
+      logical :: update_weight           = .true.
 
       character(len=MaxChar) :: input_type       = 'TIMESERIES'
       character(len=MaxChar) :: errex_type       = 'EXCLUDE'
@@ -249,11 +257,13 @@ module mod_ctrl
       integer :: neglect_unperturbed_ids(MaxStates) = NotSpecified
       integer :: alias_state_ids        (MaxStates) = NotSpecified
       integer :: unperturbed_id                     = NotSpecified
+      integer :: Kijk_init_ids          (MaxStates) = NotSpecified
       integer :: nkmax                              = 1000
       integer :: nblock                             = 5
       integer :: ncum                               = 10
       integer :: smooth_order                       = 5
-      integer :: niter_for_weight                   = 10 
+      integer :: niter_for_weight                   = 10
+      integer :: max_visit_boundaries               = 100000000
       real(8) :: temperature                        = 300.0d0
       real(8) :: dt
       real(8) :: t_sparse
@@ -264,7 +274,7 @@ module mod_ctrl
       ! Local
       !
       integer :: nreflect = 0, nproduct = 0, ndissoc = 0, ninitial = 0, nselect = 0
-      integer :: nerrex   = 0, nnegper  = 0, nalias  = 0
+      integer :: nerrex   = 0, nnegper  = 0, nalias  = 0, nKijk_init = 0
 
       ! Dummy
       !
@@ -292,6 +302,8 @@ module mod_ctrl
         check_senserr,              &
         check_blockave,             &
         check_cumulative,           &
+        calc_Kijk_specific_init,    &
+        update_weight,              &
         calc_Pint,                  &
         calc_Steady,                &
         input_type,                 &
@@ -314,11 +326,13 @@ module mod_ctrl
         neglect_unperturbed_ids,    &
         alias_state_ids,            &
         unperturbed_id,             &
+        Kijk_init_ids,              &
         nkmax,                      &
         nblock,                     &
         ncum,                       &
         smooth_order,               &
         niter_for_weight,           &
+        max_visit_boundaries,       &
         temperature,                &
         dt,                         &
         t_sparse,                   &
@@ -340,6 +354,7 @@ module mod_ctrl
       write(iw,'("use_constant_Qij     = ", a)')   get_tof(use_constant_Qij)
       write(iw,'("use_rsto_Rij         = ", a)')   get_tof(use_rsto_Rij)
       write(iw,'("use_weight_for_Kijk  = ", a)')   get_tof(use_weight_for_Kijk)
+      write(iw,'("update_weight        = ", a)')   get_tof(update_weight)
       write(iw,'("use_smoothing        = ", a)')   get_tof(use_smoothing)
       write(iw,'("output_histogram     = ", a)')   get_tof(output_histogram)
       write(iw,'("output_KRtcf         = ", a)')   get_tof(output_KRtcf)
@@ -348,6 +363,7 @@ module mod_ctrl
       write(iw,'("check_Kijk           = ", a)')   get_tof(check_Kijk)
       write(iw,'("check_senserr        = ", a)')   get_tof(check_senserr)
       write(iw,'("check_blockave       = ", a)')   get_tof(check_blockave)
+      write(iw,'("calc_Kijk_specific_init = ", a)') get_tof(calc_Kijk_specific_init)
       write(iw,'("calc_Pint            = ", a)')   get_tof(calc_Pint)
       write(iw,'("calc_Steady          = ", a)')   get_tof(calc_Steady)
       write(iw,'("f_unperturbed_id     = ", a)')   trim(f_unperturbed_id)
@@ -360,7 +376,8 @@ module mod_ctrl
       write(iw,'("temperature          = ", f20.10)') temperature
       write(iw,'("nblock               = ", i0)')     nblock
       write(iw,'("smooth_order         = ", i0)')     smooth_order
-      write(iw,'("niter_for_weight     = ", i0)')     niter_for_weight 
+      write(iw,'("niter_for_weight     = ", i0)')     niter_for_weight
+      write(iw,'("max_visit_boundaries = ", i0)')     max_visit_boundaries 
 
       write(iw,'("dt                   = ", f20.10)') dt
       write(iw,'("t_sparse             = ", f20.10)') t_sparse
@@ -489,6 +506,25 @@ module mod_ctrl
         option%is_negper(neglect_unperturbed_ids(i)) = .true. 
       end do
 
+      ! Kijk_init 
+      !
+      nKijk_init = 0
+      write(iw,*)
+      do i = 1, MaxStates
+        if (Kijk_init_ids(i) /= NotSpecified) then
+          write(iw,'("Kijk_init_ids  ", i0, " : ", i0)') i, Kijk_init_ids(i)
+          nKijk_init = nKijk_init + 1
+        else
+          exit
+        end if
+      end do
+
+      allocate(option%is_Kijk_init(nstate + nalias))
+      option%is_Kijk_init = .false.
+      do i = 1, nKijk_init
+        option%is_Kijk_init(Kijk_init_ids(i)) = .true. 
+      end do
+
       iopt = get_opt(init_type, InitTypes, ierr)
       if (ierr /= 0) then
         write(iw,'("Read_Ctrl_Option> Error.")')
@@ -543,6 +579,8 @@ module mod_ctrl
       option%check_senserr           = check_senserr
       option%check_blockave          = check_blockave
       option%check_cumulative        = check_cumulative
+      option%calc_Kijk_specific_init = calc_Kijk_specific_init
+      option%update_weight           = update_weight
       option%calc_Pint               = calc_Pint
       option%calc_Steady             = calc_Steady
       option%weight_type             = weight_type
@@ -572,12 +610,16 @@ module mod_ctrl
       option%nalias                  = nalias
       option%alias_state_ids         = alias_state_ids
 
+      option%nKijk_init              = nKijk_init
+      option%Kijk_init_ids           = Kijk_init_ids
+
       option%unperturbed_id          = unperturbed_id
       option%nkmax                   = nkmax
       option%nblock                  = nblock
       option%ncum                    = ncum
       option%smooth_order            = smooth_order
       option%niter_for_weight        = niter_for_weight
+      option%max_visit_boundaries    = max_visit_boundaries
       option%temperature             = temperature
       option%dt                      = dt
       option%t_sparse                = t_sparse
@@ -720,9 +762,11 @@ module mod_ctrl
       end if
 
       if (calc_Pint .and. calc_Steady) then
-        write(iw,'("Read_Ctrl_Option> Error.")')
-        write(iw,'("Calc_Pint and Calc_Steady can not be used at the same time.")')
-        stop
+        if (.not. option%check_cumulative) then
+          write(iw,'("Read_Ctrl_Option> Error.")')
+          write(iw,'("Calc_Pint and Calc_Steady can not be used at the same time.")')
+          stop
+        end if
       end if
 
       if (use_constant_Qij) then

@@ -331,17 +331,20 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine update_weight(option, ip)
+    subroutine update_weight(option, ip, make_init, verbose)
 !-----------------------------------------------------------------------
       implicit none
 
-      type(s_option),  intent(inout) :: option
-      type(s_infprop), intent(inout) :: ip
+      type(s_option),    intent(inout) :: option
+      type(s_infprop),   intent(inout) :: ip
+      logical, optional, intent(in)    :: make_init
+      logical, optional, intent(in)    :: verbose
 
       ! Local
       !
       integer :: nstate
       real(8) :: wsum
+      logical :: mi, vb
 
       ! Dummy
       !
@@ -352,15 +355,39 @@
       !
       nstate = option%nstate
 
+      vb = .true.
+      if (present(verbose)) then
+        vb = verbose
+      end if
+
       ! Update 
       !
-      wsum                   = sum(ip%prob(:))
-      option%state_weight(:) = ip%prob(:) / wsum
+      mi = .false.
+      if (present(make_init)) then
+        mi = make_init
+      end if
 
-      write(iw,'("[ updated weights ]")')
-      do is = 1, nstate
-        write(iw,'(i5,2x,f20.10)') is, option%state_weight(is)
-      end do
+      if (mi) then
+        wsum = 0.0d0
+        do is = 1, nstate
+          if (option%is_initial(is)) then
+            wsum = wsum + ip%prob(is)
+          else
+            ip%prob(is) = 0.0d0
+          end if 
+        end do
+        option%state_weight(:) = ip%prob(:) / wsum
+      else
+        wsum                   = sum(ip%prob(:))
+        option%state_weight(:) = ip%prob(:) / wsum
+      end if
+
+      if (vb) then
+        write(iw,'("[ updated weights ]")')
+        do is = 1, nstate
+          write(iw,'(i5,2x,f20.10)') is, option%state_weight(is)
+        end do
+      end if
 
     end subroutine update_weight
 !-----------------------------------------------------------------------

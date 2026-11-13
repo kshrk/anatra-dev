@@ -106,7 +106,8 @@ module mod_analyze
 
       integer :: iseed
       integer :: nf, niter
-      logical :: is_gen 
+      logical :: is_gen
+      logical :: calc_Pint, calc_Steady
 
       ! Dummy
       !
@@ -118,8 +119,10 @@ module mod_analyze
 
       ! Setup
       !
-      fwrk%nkmax = option%nkmax
-      niter      = option%niter_for_weight
+      fwrk%nkmax  = option%nkmax
+      niter       = option%niter_for_weight
+      calc_Pint   = option%calc_Pint
+      calc_Steady = option%calc_Steady
 
       call get_seed         (iseed)
       call initialize_random(iseed)
@@ -139,21 +142,27 @@ module mod_analyze
                         set_boundary = .true., verbose = .true.)
 
       if (option%use_weight_for_Kijk) then
+
+        option%calc_Pint   = .false.
+        option%calc_Steady = .true.
+
         allocate(fj(option%nstate))
         call calc_biased_kernels  (input, output, option, ic, boundary, fj, fwrk, &
                                    verbose = .false.)
 
-        do iter = 1, niter
-          write(iw,*)
-          write(iw,'("Iteration for determining weights: ", i0)') iter 
-          write(iw,*)
-          call calc_weighted_kernels(option, boundary, fj, f, fwrk)
-          call calc_Mjk_from_Kijk   (option, boundary, f)
-          call check_Kijk           (option, boundary, f)
-          call setup_boundary_cond  (output, option, boundary, f)
-          call reacdyn_pint(output, option, boundary, f, ip, write_steady = .false.)
-          call update_weight        (option, ip)
-        end do
+        if (option%update_weight) then
+          do iter = 1, niter
+            write(iw,*)
+            write(iw,'("Iteration for determining weights: ", i0)') iter 
+            write(iw,*)
+            call calc_weighted_kernels(option, boundary, fj, f, fwrk)
+            call calc_Mjk_from_Kijk   (option, boundary, f)
+            call check_Kijk           (option, boundary, f)
+            call setup_boundary_cond  (output, option, boundary, f)
+            call reacdyn_pint(output, option, boundary, f, ip, write_steady = .false.)
+            call update_weight        (option, ip)
+          end do
+        end if
 
         ! Re-calculate weighted kernels to remove boundary cond.
         !
@@ -166,6 +175,9 @@ module mod_analyze
           call output_Kijk_hist(option, output, fwrk, is_gen)
           call output_Rij_hist (option, output, f, is_gen)
         end if
+
+        option%calc_Pint   = calc_Pint
+        option%calc_Steady = calc_Steady
       end if
 
       if (option%nalias > 0) then
@@ -189,7 +201,12 @@ module mod_analyze
       ! Evaluate steady-state properties 
       ! (if check_Pint = .true. or check_Steady = .true.)
       !
+      if (option%calc_Pint .and. option%calc_Steady) then
+        option%calc_Pint = .false.
+      end if
+
       call reacdyn_pint(output, option, boundary, f, ip, write_steady = .true.)
+      option%calc_Pint = calc_Pint
 
       ! Calculate Block-Average of steady-state properties
       ! (if check_blockave = .true.)
@@ -369,11 +386,11 @@ module mod_analyze
       type(s_func),     intent(inout) :: f 
 
 
-      write(iw,*)
-      write(iw,'("Analyze> Setup boundary conditions")')
+      !write(iw,*)
+      !write(iw,'("Analyze> Setup boundary conditions")')
       call set_reflection(output, option, boundary, f) 
       call set_product   (output, option, boundary, f)
-      write(iw,'(">> Done")')
+      !write(iw,'(">> Done")')
 !
     end subroutine setup_boundary_cond 
 !-----------------------------------------------------------------------
@@ -544,7 +561,7 @@ module mod_analyze
      
       type(s_input),    intent(in)    :: input 
       type(s_output),   intent(in)    :: output
-      type(s_option),   intent(in)    :: option
+      type(s_option),   intent(inout) :: option
       type(s_boundary), intent(inout) :: boundary
       type(s_inpcond),  intent(inout) :: ic 
       type(s_fwrk),     intent(inout) :: fwrk 
@@ -555,16 +572,22 @@ module mod_analyze
 
       ! Local
       !
-      integer      :: nstate, block_size, ntraj_each
+      integer      :: nstate, block_size, ntraj_each, niter
+      logical      :: calc_Pint, calc_Steady 
       type(s_func) :: fs
+      integer      :: nreflect, reflection_state_ids(MaxStates)
 
       ! Dummy
       !
-      integer :: is, iblock, itraj
+      integer :: is, js, iblock, itraj, iter
 
       ! Array
       !
       type(s_infprop), allocatable :: ipse(:)
+      type(s_func),    allocatable :: fj(:)
+      logical,         allocatable :: is_dissoc(:)
+      logical,         allocatable :: is_reflect(:)
+      real(8),         allocatable :: state_weight(:)
 
 
       if (.not. option%check_cumulative) return 
@@ -574,15 +597,31 @@ module mod_analyze
 
       ! Setup
       !
-      nstate = option%nstate
+      nstate               = option%nstate
+      niter                = option%niter_for_weight
+      calc_Steady          = option%calc_Steady
+      calc_Pint            = option%calc_Pint
+      nreflect             = option%nreflect
+      reflection_state_ids = option%reflection_state_ids
 
       ! Allocate
       !
       allocate(ipse(option%ncum))
+      allocate(is_dissoc(nstate))
+      allocate(is_reflect(nstate))
+      allocate(state_weight(nstate))
+
+      is_dissoc    = option%is_dissoc
+      is_reflect   = option%is_reflect
+      state_weight = option%state_weight_unnorm / sum(option%state_weight_unnorm)
 
       do iblock = 1, option%ncum
       
         write(iw,'("Block ", i0)') iblock
+
+        ! Initialize
+        !
+        option%state_weight = state_weight
 
         ! Set Start and End trajectories 
         !
@@ -593,6 +632,10 @@ module mod_analyze
               block_size  = ic%nfile_each_state(is) / option%ncum
               ic%ista(is) = 1
               ic%iend(is) = block_size * iblock
+              if (option%is_errex(is)) then
+                ic%ista(is) = 1
+                ic%iend(is) = ic%nfile_each_state(is)
+              end if
               write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
             end do
           else if (option%conv_check_type == ConvCheckTypeLength) then
@@ -601,6 +644,10 @@ module mod_analyze
               block_size            = ic%nlen_each_traj(is)   / option%ncum 
               ic%ista(is)           = 1
               ic%iend(is)           = block_size * iblock
+              if (option%is_errex(is)) then
+                ic%ista(is) = 1
+                ic%iend(is) = ic%nfile_each_state(is)
+              end if
               write(iw,'(2x,"State ", i5, " (trjectory length) : ", i0,2x,i0)') &
                 is, ic%ista(is), ic%iend(is) 
             end do
@@ -612,6 +659,10 @@ module mod_analyze
               block_size  = ic%nfile_each_state(is) / option%ncum
               ic%ista(is) = block_size * (iblock - 1) + 1
               ic%iend(is) = ic%nfile_each_state(is)
+              if (option%is_errex(is)) then
+                ic%ista(is) = 1
+                ic%iend(is) = ic%nfile_each_state(is)
+              end if
               write(iw,'(2x,"State ", i5, " : ", i0,2x,i0)') is, ic%ista(is), ic%iend(is) 
             end do
           else if (option%conv_check_type == ConvCheckTypeLength) then
@@ -620,6 +671,10 @@ module mod_analyze
               block_size            = ic%nlen_each_traj(is)   / option%ncum 
               ic%ista(is)           = block_size * (iblock - 1) + 1 
               ic%iend(is)           = ic%nlen_each_traj(is) 
+              if (option%is_errex(is)) then
+                ic%ista(is) = 1
+                ic%iend(is) = ic%nfile_each_state(is)
+              end if
               write(iw,'(2x,"State ", i5, " (trjectory length) : ", i0,2x,i0)') &
                 is, ic%ista(is), ic%iend(is) 
             end do
@@ -629,13 +684,82 @@ module mod_analyze
 
         ! Calculate Kernels
         !
-        call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
-                          set_boundary = .false., verbose = .false.)
+        if (iblock == 1) then
+          call calc_kernels(input, output, option, ic, boundary, fs, fwrk, &
+                            set_boundary = .false., verbose = .false.)
+        end if
+
+        if (option%use_weight_for_Kijk) then
+          if (.not. allocated(fj)) then 
+            allocate(fj(option%nstate))
+          end if
+
+          if (iblock == 1) then
+            call calc_biased_kernels  (input, output, option, ic, boundary, fj, fwrk, &
+                                       verbose = .false.)
+          else
+            call calc_biased_kernels  (input, output, option, ic, boundary, fj, fwrk, &
+                                       is_errex = option%is_errex, verbose = .false.)
+          end if
+
+          option%calc_Steady = .true.
+          option%calc_Pint   = .false.
+          if (option%update_weight) then
+            do iter = 1, niter
+              !write(iw,*)
+              !write(iw,'("Iteration for determining weights: ", i0)') iter 
+              !write(iw,*)
+              call calc_weighted_kernels(option, boundary, fj, fs, fwrk)
+              call calc_Mjk_from_Kijk   (option, boundary, fs)
+              !call check_Kijk           (option, boundary, fs)
+              call setup_boundary_cond  (output, option, boundary, fs)
+              call reacdyn_pint(output, option, boundary, fs, ipse(iblock), write_steady = .false.)
+              call update_weight        (option, ipse(iblock), verbose = .false.)
+            end do
+          end if
+
+          ! Re-calculate weighted kernels to remove boundary cond.
+          !
+          call calc_weighted_kernels(option, boundary, fj, fs, fwrk)
+          call calc_Mjk_from_Kijk   (option, boundary, fs)
+          call check_Kijk           (option, boundary, fs)
+
+        end if
+
+        option%calc_Steady = calc_Steady
+        option%calc_Pint   = calc_Pint
+
+        if (option%calc_Pint) then
+          do is = 1, nstate
+            if (is_dissoc(is)) then
+              option%is_reflect(is) = .false.
+            end if
+          end do
+          option%nreflect = 0
+          option%reflection_state_ids = NotSpecified
+          js = 0
+          do is = 1, nstate
+            if (option%is_reflect(is)) then
+              js = js + 1
+              option%reflection_state_ids(js) = is 
+            end if
+          end do
+          option%nreflect = js
+          option%calc_Steady = .false.
+          call update_weight(option, ipse(iblock), make_init = .true., verbose = .false.)
+
+          call normalize_Rij(option, fs)
+          call running_integral_Rij(option, fs)
+          call calc_P0_from_Rij    (option, boundary, fs)
+
+        end if
 
         ! Setup Boundary conditions
         !
-        call set_reflection(output, option, boundary, fs) 
-        call set_product   (output, option, boundary, fs)
+
+        call setup_boundary_cond(output, option, boundary, fs)
+        !call set_reflection(output, option, boundary, fs) 
+        !call set_product   (output, option, boundary, fs)
 
         ! Calculate steady-state properties
         !
@@ -644,10 +768,21 @@ module mod_analyze
         else if (option%calc_Pint) then
           write(fname,'(a,".int.",i4.4)')    trim(output%fhead), iblock
         end if
+
         call reacdyn_pint(output, option, boundary, fs, ipse(iblock), &
                           write_steady = .true., fname_out = fname)
+
+        ! Load original boundary settings
+        !
+        option%nreflect             = nreflect
+        option%reflection_state_ids = reflection_state_ids
+        option%is_reflect           = is_reflect
       end do 
 
+      if (allocated(fj)) deallocate(fj)
+
+      option%calc_Steady = calc_Steady
+      option%calc_Pint   = calc_Pint
 !
     end subroutine calc_cumulative
 !-----------------------------------------------------------------------
@@ -1210,7 +1345,7 @@ module mod_analyze
 
 !-----------------------------------------------------------------------
     subroutine calc_biased_kernels(input, output, option, ic, b, fj, fwrk, &
-                                     verbose)
+                                   is_errex, verbose)
 !-----------------------------------------------------------------------
       implicit none
 
@@ -1221,6 +1356,7 @@ module mod_analyze
       type(s_boundary),  intent(inout) :: b
       type(s_func),      intent(inout) :: fj(:)
       type(s_fwrk),      intent(inout) :: fwrk
+      logical, optional, intent(in)    :: is_errex(:) 
       logical, optional, intent(in)    :: verbose
 
       ! I/O
@@ -1249,6 +1385,7 @@ module mod_analyze
       ! Arrays
       !
       integer,      allocatable :: ncount_traj(:)
+      logical,      allocatable :: ise(:)
 
 
       ! Setup
@@ -1258,19 +1395,38 @@ module mod_analyze
       nstate   = option%nstate
       nt_range = option%nt_range
 
+      ! Verbose setting
+      !
       vb = .false.
       if (present(verbose)) vb = verbose
+
+      ! Exception setting
+      !
+      if (.not. allocated(ise)) then 
+        allocate(ise(nstate))
+      end if
+      ise = .false.
+
+      if (present(is_errex)) then
+        ise = is_errex
+      end if
 
       ! Allocate some arrays in fj structure
       !
       do istate = 1, nstate
-        allocate(fj(istate)%R   (0:nt_range, nstate, nstate))
-        allocate(fj(istate)%Rint(0:nt_range, nstate, nstate))
-        allocate(fj(istate)%P0  (0:nt_range, nstate))
-        fj(istate)%R         = 0.0d0
-        fj(istate)%Rint      = 0.0d0
-        fj(istate)%P0        = 0.0d0
-        fj(istate)%nstep_tot = 0
+        if (.not. allocated(fj(istate)%R)) then
+          allocate(fj(istate)%R   (0:nt_range, nstate, nstate))
+          allocate(fj(istate)%Rint(0:nt_range, nstate, nstate))
+          allocate(fj(istate)%P0  (0:nt_range, nstate))
+        end if
+
+        if (.not. ise(istate)) then 
+          fj(istate)%R         = 0.0d0
+          fj(istate)%Rint      = 0.0d0
+          fj(istate)%P0        = 0.0d0
+          fj(istate)%nstep_tot = 0
+        end if
+
       end do
       !end if
 
@@ -1294,6 +1450,13 @@ module mod_analyze
       ncount_traj = 0
 
       do istate = 1, nstate
+
+        if (ise(istate)) cycle
+
+        fwrk%K         = 0.0d0
+        fwrk%h         = 0.0d0
+        fwrk%nstep_tot = 0
+
         do ifile = 1, ic%nkhist 
 
           id = ic%unperturbed_ids(ifile)
@@ -1337,6 +1500,9 @@ module mod_analyze
           call seek_line(io, 'KIJK', ierr)
           if (ierr == 0) call update_Kijk_from_hist(io, option, fwrk)
 
+          call seek_line(io, 'RIJ', ierr)
+          if (ierr == 0) call update_Rij_from_hist(io, option, fj(istate)) 
+
           close(io)
         end do
         call get_state_connectivity_from_h(option, fwrk%h, b)
@@ -1346,8 +1512,9 @@ module mod_analyze
         call convert_Kijk_arrays(option, b, fwrk, fj(istate))
 
         ! Normalize K-function
-        ! 
+        !
         call normalize_Kijk(option, b, fj(istate), verbose = vb)
+        !call normalize_Rij(option, fj(istate))
 
         if (option%use_smoothing) then
           call smooth_RK(option, b, fj(istate))
@@ -1400,6 +1567,8 @@ module mod_analyze
       dt        = option%dt_out
       nboundary = b%nboundary 
 
+      ! Kijk
+      !
       fwrk%K = 0.0d0
       f%K    = 0.0d0 
       do ib = -nboundary, nboundary
@@ -1470,6 +1639,14 @@ module mod_analyze
           fwrk%h(is2, is1) = 100.0d0
         end if 
       end do
+
+      ! Rij
+      !
+      !do is1 = 1, nstate
+      !  do is2 = 1, nstate
+      !    f%R(:, is2, is1) = fj(is1)%R(:, is2, is1)
+      !  end do
+      !end do
 
     end subroutine calc_weighted_kernels
 !-----------------------------------------------------------------------

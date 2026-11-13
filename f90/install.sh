@@ -219,6 +219,7 @@ list="center_of_mass          \
       average_function        \
       bootstrap_prepper       \
       iepdyn                  \
+      iepdyn_fe               \
       return_prob             \
       restricted_radial       \
       potential_of_mean_force \

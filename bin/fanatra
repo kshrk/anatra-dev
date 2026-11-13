@@ -21,7 +21,8 @@ anas=("histogram"                \
       "bootstrap_prepper"        \
       "return_prob"              \
       "rprate"                   \
-      "iepdyn") 
+      "iepdyn"                   \
+      "iepdyn_fe") 
 
 anas_abbrev=("hist"                \
              "pmf"                 \
@@ -34,7 +35,8 @@ anas_abbrev=("hist"                \
 	     "boot"                \
              "rp"                  \
              "rprate"              \
-	     "iepdyn")
+	     "iepdyn"              \
+	     "iepdyn_fe")
 
 exes=("histogram.x"                 \
       "potential_of_mean_force.x"   \
@@ -47,20 +49,22 @@ exes=("histogram.x"                 \
       "bootstrap_prepper.x"         \
       "return_prob.x"               \
       "rprate.x"                    \
-      "iepdyn.x") 
+      "iepdyn.x"                    \
+      "iepdyn_fe.x") 
 
-hlp=("histogram               (hist)   : Histogram Analysis"                         \
-     "potential_of_mean_force (pmf)    : Free-energy Profile Analysis"               \
-     "restricted_radial       (rrpmf)  : Restricted Radial Analysis"                 \
-     "extract_frame           (extf)   : Extract Frames Using CV"                    \
-     "random_frame            (randf)  : Randomly Extract Frames"                    \
-     "state_define            (sdef)   : Define States From Time-series Data"        \
-     "moving_average          (movave) : Moving Average Analysis"                    \
-     "average_function        (avef)   : Function Average Analysis"                  \
-     "bootstrap_prepper       (boot)   : Bootstrap Sample Generator"                 \
-     "return_prob             (rp)     : Returning Probability Analysis"             \
-     "rprate                  (rprate) : Rate Constant Analysis based on RP theory"  \
-     "iepdyn                  (iepdyn) : Integral-equation Formalism of Population Dynamics")
+hlp=("histogram               (hist)      : Histogram Analysis"                         \
+     "potential_of_mean_force (pmf)       : Free-energy Profile Analysis"               \
+     "restricted_radial       (rrpmf)     : Restricted Radial Analysis"                 \
+     "extract_frame           (extf)      : Extract Frames Using CV"                    \
+     "random_frame            (randf)     : Randomly Extract Frames"                    \
+     "state_define            (sdef)      : Define States From Time-series Data"        \
+     "moving_average          (movave)    : Moving Average Analysis"                    \
+     "average_function        (avef)      : Function Average Analysis"                  \
+     "bootstrap_prepper       (boot)      : Bootstrap Sample Generator"                 \
+     "return_prob             (rp)        : Returning Probability Analysis"             \
+     "rprate                  (rprate)    : Rate Constant Analysis based on RP theory"  \
+     "iepdyn                  (iepdyn)    : Integral-Equation Formalism of Population Dynamics" \
+     "iepdyn_fe               (iepdyn_fe) : Free-Energy Estimation based on Integral-Equation Formalism of Population Dynamics") 
 
 nanas=${#anas[@]}
 
