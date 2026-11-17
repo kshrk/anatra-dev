@@ -109,6 +109,10 @@ module mod_ctrl
     real(8)              :: t_extend     = - 1.0d0
     real(8)              :: dt_tcfout    = - 1.0d0
 
+    ! Qij_init
+    !
+    real(8), allocatable :: Qij_init(:, :)
+
     ! prepared after reading namelists
     !
     integer              :: nreflect     = 0
@@ -195,7 +199,9 @@ module mod_ctrl
       call show_output      (output)
       call read_ctrl_option (io, option, timegrid)
       call read_ctrl_state  (io, option)
-      !call read_ctrl_Qinit  (io, option)
+      if (option%init_type == InitTypeQ) then
+        call read_ctrl_Qij_init (io, option)
+      end if
       close(io)
 
     end subroutine read_ctrl
@@ -893,6 +899,65 @@ module mod_ctrl
       write(iw,*)
 
     end subroutine read_ctrl_state
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine read_ctrl_Qij_init(io, option)
+!-----------------------------------------------------------------------
+      implicit none
+
+      integer,        intent(in)    :: io
+      type(s_option), intent(inout) :: option
+
+      ! Local
+      !
+      character(len=MaxChar) :: line
+      integer                :: nstate
+      real(8)                :: val
+
+      ! Dummy
+      !
+      integer :: istate, jstate, idm, iset, imm, ierr
+      integer :: is, js
+
+
+      ! Setup
+      !
+      nstate   = option%nstate
+
+      ! Allocate
+      !
+      allocate(option%Qij_init(nstate, nstate))
+      option%Qij_init = 0.0d0
+
+      call seek_line(io, '&Qij_init', ierr)
+
+      if (ierr /= 0) then
+        write(iw,'("Read_Ctrl_Qij_init> Error.")')
+        write(iw,'("&Qij_init section is not found.")')
+        stop
+      end if
+
+      write(iw,*)
+      write(iw,'("Read_Ctrl_Qij_init> Read Initial value of Qij")')
+
+      do while (.true.)
+        read(io,'(a)', end = 100) line
+
+        if (line(1:1) == '/') exit
+
+        if (line(1:1) /= "#" .and. line(1:1) /= "!") then
+          read(line, *) is, js, val
+
+          option%Qij_init(is, js) = val
+          write(iw,'(i5,2x,i5," : ", f20.15)') is, js, option%Qij_init(is, js) 
+        end if
+
+      end do
+
+100   continue
+
+    end subroutine read_ctrl_Qij_init
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------

@@ -319,6 +319,42 @@
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
+    subroutine set_Rij_from_Qij_init(option, f) 
+!-----------------------------------------------------------------------
+      implicit none
+
+      type(s_option), intent(in)    :: option
+      type(s_func),   intent(inout) :: f
+
+
+      ! Local
+      !
+      integer :: nstate
+      real(8) :: dt
+
+      ! Dummy
+      !
+      integer :: is, js
+
+
+      ! Setup
+      !
+      nstate = option%nstate
+      dt     = option%dt_out
+
+      f%R            = 0.0d0
+      f%R(0, :, :) = option%Qij_init(:, :)
+
+      do js = 1, nstate
+        do is = 1, nstate
+          f%Rint(:, is, js) = option%Qij_init(is, js) * dt 
+        end do
+      end do
+
+    end subroutine set_Rij_from_Qij_init 
+!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
     subroutine write_Rij(output, option, boundary, f)
 !-----------------------------------------------------------------------
       implicit none

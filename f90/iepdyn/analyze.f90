@@ -1188,10 +1188,12 @@ module mod_analyze
        
               ! Update R- and K-functions
               !
-              if (option%use_rsto_Rij) then
-                call update_rsto_Rij(option, state, f)
-              else
-                call update_Rij_wo_normalize(option, state, f)
+              if (option%init_type == InitTypeP) then
+                if (option%use_rsto_Rij) then
+                  call update_rsto_Rij(option, state, f)
+                else
+                  call update_Rij_wo_normalize(option, state, f)
+                end if
               end if
 
               call update_Kijk_wo_normalize(option, state, fwrk)
@@ -1308,7 +1310,12 @@ module mod_analyze
 
       ! Normalize R- and K-functions
       ! 
-      call normalize_Rij(option, f)
+      if  (option%init_type == InitTypeP) then
+        call normalize_Rij(option, f)
+      else if (option%init_type == InitTypeQ) then
+        call set_Rij_from_Qij_init(option, f) 
+      end if
+
       call normalize_Kijk(option, b, f, verbose = vb)
 
       if (option%use_smoothing) then
@@ -1327,8 +1334,13 @@ module mod_analyze
         write(iw,*)
         write(iw,'("Analyze> Calculate P0 from Rij")')
       end if
-      call running_integral_Rij(option, f)
-      call calc_P0_from_Rij    (option, b, f)
+
+      if (option%init_type == InitTypeP) then
+        call running_integral_Rij(option, f)
+        call calc_P0_from_Rij    (option, b, f)
+      else if (option%init_type == InitTypeQ) then
+        f%P0 = 0.0d0
+      end if
       if (vb) write(iw,'(">> Done")')
 
       ! Compute Mij

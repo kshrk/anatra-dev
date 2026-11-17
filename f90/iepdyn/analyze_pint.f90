@@ -201,6 +201,20 @@
             write(io,'("Pint ", i9, 2x, e15.7)') is, Pint(is)
           end do
           close(io)
+
+          write(fname,'(a,".qint")') trim(output%fhead)
+          if (present(fname_out)) then
+            write(fname,'(a)') trim(fname_out)
+          end if
+
+          call open_file(fname, io)
+          do iu = 1, nbt
+            is = map(2, iu)
+            js = map(1, iu)
+            write(io,'(i9, 2x, i9, 2x, e15.7)') is, js, Qint(iu)
+          end do
+          close(io)
+
         end if
 
       end if
