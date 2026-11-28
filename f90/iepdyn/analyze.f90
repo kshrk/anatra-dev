@@ -59,6 +59,7 @@ module mod_analyze
     real(8), allocatable :: prob(:)
     real(8), allocatable :: fe(:)
     real(8), allocatable :: fe_pair(:, :)
+    real(8), allocatable :: Sjk(:)
   end type s_infprop
 
   type :: s_inpcond
@@ -88,7 +89,7 @@ module mod_analyze
       type(s_input),       intent(in)    :: input
       type(s_extra_input), intent(in)    :: einput
       type(s_output),      intent(in)    :: output
-      type(s_option),      intent(inout)    :: option
+      type(s_option),      intent(inout) :: option
       type(s_timegrid),    intent(in)    :: timegrid 
 
       ! I/O
@@ -96,7 +97,7 @@ module mod_analyze
 
       ! Local
       !
-      type(s_func)     :: f
+      type(s_func)     :: f, fpatch
       type(s_inpcond)  :: ic
       type(s_boundary) :: boundary
       type(s_cv)       :: cv
@@ -105,22 +106,27 @@ module mod_analyze
       type(s_infprop)  :: ip
 
       integer :: iseed
-      integer :: nf, niter
+      integer :: nf, niter 
       logical :: is_gen
+
+      integer :: nstate, nt_range, nboundary
       logical :: calc_Pint, calc_Steady
 
       ! Dummy
       !
-      integer :: iter
+      integer :: iter, jter, istate, ib 
 
       ! Arrays
       !
       type(s_func), allocatable :: fj(:)
+      real(8),      allocatable :: Sjk(:, :)
 
       ! Setup
       !
       fwrk%nkmax  = option%nkmax
       niter       = option%niter_for_weight
+      nstate      = option%nstate
+      nt_range    = option%nt_range
       calc_Pint   = option%calc_Pint
       calc_Steady = option%calc_Steady
 
@@ -141,6 +147,8 @@ module mod_analyze
       call calc_kernels(input, output, option, ic, boundary, f, fwrk, &
                         set_boundary = .true., verbose = .true.)
 
+      nboundary = boundary%nboundary
+
       if (option%use_weight_for_Kijk) then
 
         option%calc_Pint   = .false.
@@ -155,18 +163,109 @@ module mod_analyze
             write(iw,*)
             write(iw,'("Iteration for determining weights: ", i0)') iter 
             write(iw,*)
-            call calc_weighted_kernels(option, boundary, fj, f, fwrk)
-            call calc_Mjk_from_Kijk   (option, boundary, f)
-            call check_Kijk           (option, boundary, f)
-            call setup_boundary_cond  (output, option, boundary, f)
-            call reacdyn_pint(output, option, boundary, f, ip, write_steady = .false.)
-            call update_weight        (option, ip)
+
+            if (option%weight_type == 0 .or. option%weight_type == 1) then
+              call calc_weighted_kernels(option, boundary, ip, fj, f, fwrk)
+              call calc_Mjk_from_Kijk   (option, boundary, f)
+              call check_Kijk           (option, boundary, f)
+              call setup_boundary_cond  (output, option, boundary, f)
+              call reacdyn_pint(output, option, boundary, f, ip, write_steady = .false.)
+              call update_weight        (option, ip)
+
+            else if (option%weight_type == 2) then
+
+              !if (iter == 1) then
+              !  option%weight_type = 0
+              !  do jter = 1, niter 
+              !    call calc_weighted_kernels(option, boundary, fj, f, fwrk)
+              !    call calc_Mjk_from_Kijk   (option, boundary, f)
+              !    call check_Kijk           (option, boundary, f)
+              !    call setup_boundary_cond  (output, option, boundary, f)
+              !    call reacdyn_pint(output, option, boundary, f, ip, write_steady = .false.)
+              !    call update_weight        (option, ip)
+              !  end do
+              !  option%weight_type = 2
+              !end if
+
+              ! Allocate
+              !
+              if (.not. allocated(fpatch%R)) then
+                allocate(fpatch%R   (0:nt_range, nstate, nstate))
+                allocate(fpatch%Rint(0:nt_range, nstate, nstate))
+                allocate(fpatch%P0  (0:nt_range, nstate))
+                allocate(fpatch%K(0:nt_range, nstate, -nboundary:nboundary))
+                allocate(fpatch%M(0:nt_range, -nboundary:nboundary))
+                allocate(fpatch%hit_count(-nboundary:nboundary))
+              end if
+
+              if (.not. allocated(Sjk)) then
+                allocate(Sjk(-nboundary:nboundary, nstate))
+              end if
+
+              Sjk = 0.0d0
+
+              ! Loop for patch
+              !
+
+              do istate = 1, nstate 
+
+                if (ic%nfile_each_state(istate) == 0) cycle
+
+                ! Initialize
+                !
+                fpatch%R         = 0.0d0
+                fpatch%Rint      = 0.0d0
+                fpatch%P0        = 0.0d0
+                fpatch%K         = 0.0d0
+                fpatch%M         = 0.0d0
+                fpatch%hit_count = 0.0d0
+                fpatch%nstep_tot = 0.0d0
+
+                fpatch%K         = f%K
+                fpatch%M         = f%M
+                fpatch%P0        = f%P0
+                fpatch%R         = f%R
+                fpatch%Rint      = f%Rint
+                fpatch%hit_count = f%hit_count
+
+                ! Construct patched kernels
+                !
+                call calc_patch_kernels(istate, option, boundary, fj, fpatch)
+                call calc_Mjk_from_Kijk(option, boundary, fpatch)
+                call setup_boundary_cond(output, option, boundary, fpatch)
+                call reacdyn_pint(output, option, boundary, fpatch, ip, write_steady = .false.)
+                Sjk(:, istate) = ip%Sjk(:)
+
+                !write(iw,'("Sjk value for trajectory group ", i0)') istate
+                !write(iw,*)
+                !do ib = -nboundary, nboundary
+                !  if (ib == 0) cycle
+                !  write(iw,'(i5,i5,f20.10)') boundary%b2p(2, ib), boundary%b2p(1, ib), Sjk(ib, istate)
+                !end do
+                !write(iw,*)
+                
+              end do
+
+              call calc_weighted_kernels(option, boundary, ip, fj, fpatch, fwrk, Sjk = Sjk)
+              call calc_Mjk_from_Kijk   (option, boundary, fpatch)
+
+              f = fpatch
+
+              call setup_boundary_cond  (output, option, boundary, fpatch)
+              call reacdyn_pint(output, option, boundary, fpatch, ip, write_steady = .false.)
+              call update_weight        (option, ip)
+
+            end if
           end do
         end if
 
         ! Re-calculate weighted kernels to remove boundary cond.
         !
-        call calc_weighted_kernels(option, boundary, fj, f, fwrk)
+        if (option%weight_type == 0 .or. option%weight_type == 1) then
+          call calc_weighted_kernels(option, boundary, ip, fj, f, fwrk)
+        else if (option%weight_type == 2) then
+          call calc_weighted_kernels(option, boundary, ip, fj, f, fwrk, Sjk = Sjk)
+        end if
         call calc_Mjk_from_Kijk   (option, boundary, f)
         call check_Kijk           (option, boundary, f)
 
@@ -178,6 +277,7 @@ module mod_analyze
 
         option%calc_Pint   = calc_Pint
         option%calc_Steady = calc_Steady
+
       end if
 
       if (option%nalias > 0) then
@@ -216,7 +316,7 @@ module mod_analyze
       ! Conduct Cumulative analysis 
       ! (if check_cumulative = .true.)
       !
-      call calc_cumulative(input, output, option, boundary, ic, fwrk)
+      call calc_cumulative(input, output, option, boundary, ip, ic, fwrk)
 
       ! Conduct Sensitivity-Error analysis
       ! (if check_senserr = .true.)
@@ -555,7 +655,7 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine calc_cumulative(input, output, option, boundary, ic, fwrk) 
+    subroutine calc_cumulative(input, output, option, boundary, ip, ic, fwrk) 
 !-----------------------------------------------------------------------
       implicit none
      
@@ -563,6 +663,7 @@ module mod_analyze
       type(s_output),   intent(in)    :: output
       type(s_option),   intent(inout) :: option
       type(s_boundary), intent(inout) :: boundary
+      type(s_infprop),  intent(inout) :: ip
       type(s_inpcond),  intent(inout) :: ic 
       type(s_fwrk),     intent(inout) :: fwrk 
 
@@ -709,7 +810,7 @@ module mod_analyze
               !write(iw,*)
               !write(iw,'("Iteration for determining weights: ", i0)') iter 
               !write(iw,*)
-              call calc_weighted_kernels(option, boundary, fj, fs, fwrk)
+              call calc_weighted_kernels(option, boundary, ip, fj, fs, fwrk)
               call calc_Mjk_from_Kijk   (option, boundary, fs)
               !call check_Kijk           (option, boundary, fs)
               call setup_boundary_cond  (output, option, boundary, fs)
@@ -720,7 +821,7 @@ module mod_analyze
 
           ! Re-calculate weighted kernels to remove boundary cond.
           !
-          call calc_weighted_kernels(option, boundary, fj, fs, fwrk)
+          call calc_weighted_kernels(option, boundary, ip, fj, fs, fwrk)
           call calc_Mjk_from_Kijk   (option, boundary, fs)
           call check_Kijk           (option, boundary, fs)
 
@@ -1540,15 +1641,339 @@ module mod_analyze
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------
-    subroutine calc_weighted_kernels(option, b, fj, f, fwrk)
+    subroutine calc_weighted_kernels(option, b, ip, fj, f, fwrk, Sjk)
+!-----------------------------------------------------------------------
+!
+!  Mix trajectory-group kernels fj(istate)%K into f%K.
+!
+!  Changes from the original version
+!   (1) The inclusion of a trajectory group is decided per influx
+!       boundary jb (by hit_count(jb)), not per exit (is2).
+!       A group that entered is1 through jb but never left through a
+!       given exit now contributes K = 0 to that exit, instead of being
+!       dropped from the denominator for that exit only.
+!       Since every group uses the same weight w for all exits of
+!       (is1, jb), sum_{exits} int K is preserved by the mixing.
+!   (2) Removed unused code for weight_type = 2
+!       (overwritten sw = hit_count/nstep_tot, unused dS / Sprev / pj).
+!   (3) Optional report of sum_{exits} int K for each influx boundary
+!       (printed only if option%check_Kijk = .true.).
+!
 !-----------------------------------------------------------------------
       implicit none
 
       type(s_option),    intent(in)    :: option
       type(s_boundary),  intent(inout) :: b
+      type(s_infprop),   intent(inout) :: ip
       type(s_func),      intent(inout) :: fj(:)
       type(s_func),      intent(inout) :: f
       type(s_fwrk),      intent(inout) :: fwrk
+      real(8), optional, intent(inout) :: Sjk(-b%nboundary:b%nboundary, option%nstate)
+
+      ! Local
+      !
+      integer :: nstate
+      integer :: nt_range
+      integer :: nboundary
+      real(8) :: dt
+
+      ! Parameter
+      !
+      real(8), parameter :: hit_threshold = 0.1d0
+
+      ! Dummy
+      !
+      integer :: inflx, ik, js1, js2, is1, is2, ib, jb
+      integer :: istate
+      real(8) :: wsum, sw, w, ksum
+
+      ! Setup
+      !
+      nstate    = option%nstate
+      nt_range  = option%nt_range
+      dt        = option%dt_out
+      nboundary = b%nboundary
+
+      if (option%weight_type == 2 .and. .not. present(Sjk)) then
+        write(iw,'("Calc_Weighted_Kernels> Error.")')
+        write(iw,'("Sjk must be given for weight_type = 2. stop.")')
+        stop
+      end if
+
+      ! Kijk
+      !
+      fwrk%K = 0.0d0
+      f%K    = 0.0d0
+      do ib = -nboundary, nboundary
+        if (ib == 0) cycle
+        is1 = b%b2p(1, ib)       ! current state
+        is2 = b%b2p(2, ib)       ! exit state
+        do inflx = 1, b%n_influx_boundary(is1)
+          jb  = b%influx_boundary(inflx, is1)   ! entered is1 via jb
+          js1 = b%b2p(1, jb)                    ! state entered from
+          js2 = b%b2p(2, jb)                    ! (= is1)
+
+          wsum = 0.0d0
+          do istate = 1, nstate
+
+            ! Inclusion criterion common to all exits of (is1, jb):
+            ! group istate has observed at least one entry through jb
+            !
+            if (fj(istate)%hit_count(jb) <= hit_threshold) cycle
+
+            if (option%weight_type == 0) then
+              sw = 1.0d0
+
+            else if (option%weight_type == 1) then
+              if (fj(istate)%nstep_tot > 0) then
+                sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
+              else
+                sw = 0.0d0
+              end if
+
+            else if (option%weight_type == 2) then
+              sw = Sjk(jb, istate)
+
+            else
+              write(iw,'("Calc_Weighted_Kernels> Error.")')
+              write(iw,'("Unknown weight_type: ", i0, ". stop.")') option%weight_type
+              stop
+            end if
+
+            w               = sw * option%state_weight(istate)
+            wsum            = wsum + w
+            f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+          end do
+
+          if (wsum < 1.0d-10) then
+            f%K(:, is2, jb) = 0.0d0
+          else
+            f%K(:, is2, jb) = f%K(:, is2, jb) / wsum
+          end if
+
+          ik = fwrk%kmesh(is2, is1, js1)
+          if (ik == 0) cycle
+
+          fwrk%K(:, ik)  = f%K(:, is2, jb) * 100.0d0 * option%dt
+          fwrk%nstep_tot = 1
+        end do
+      end do
+
+      do ib = -nboundary, nboundary
+        if (ib == 0) cycle
+        is1 = b%b2p(1, ib)
+        is2 = b%b2p(2, ib)
+        if (sum(f%K(:, :, ib)*dt) > 1.0d-5) then
+          fwrk%h(is2, is1) = 100.0d0
+        end if
+      end do
+
+      ! Report sum_{exits} int K for each influx boundary
+      ! (should be 1 if all entries exit within t_range)
+      !
+      if (option%check_Kijk) then
+        write(iw,'("Calc_Weighted_Kernels> sum of int K over exits")')
+        write(iw,'("  state  <- from   :  sum")')
+        do jb = -nboundary, nboundary
+          if (jb == 0) cycle
+          js1  = b%b2p(1, jb)
+          js2  = b%b2p(2, jb)
+          ksum = sum(f%K(:, :, jb)) * dt
+          write(iw,'(2x, i5, 4x, i5, 3x, ": ", f15.7)') js2, js1, ksum
+        end do
+        write(iw,*)
+      end if
+
+    end subroutine calc_weighted_kernels
+!-----------------------------------------------------------------------
+
+!!-----------------------------------------------------------------------
+!    subroutine calc_weighted_kernels(option, b, ip, fj, f, fwrk, Sjk)
+!!-----------------------------------------------------------------------
+!      implicit none
+!
+!      type(s_option),    intent(in)    :: option
+!      type(s_boundary),  intent(inout) :: b
+!      type(s_infprop),   intent(inout) :: ip
+!      type(s_func),      intent(inout) :: fj(:)
+!      type(s_func),      intent(inout) :: f
+!      type(s_fwrk),      intent(inout) :: fwrk
+!      real(8), optional, intent(inout) :: Sjk(-b%nboundary:b%nboundary, option%nstate)
+!
+!      ! I/O
+!      !
+!
+!      ! Local
+!      !
+!      integer :: nstep, nstate
+!      integer :: nt_range
+!      integer :: nboundary
+!      real(8) :: dt
+!
+!      integer :: ncomp
+!      real(8) :: Sprev, dS
+!      logical :: is_end
+!      logical :: sb
+!      logical :: is_gen
+!
+!      ! Dummy
+!      !
+!      integer :: inflx, istep, iseg, ik, js1, js2, is1, is2, ib, jb
+!      integer :: istate, icomp
+!      real(8) :: wsum, sw, w
+!
+!      ! Arrays
+!      !
+!      real(8), allocatable :: pj(:)
+!      integer, allocatable :: comp(:)
+!
+!      ! Setup
+!      ! 
+!      nstate    = option%nstate
+!      nt_range  = option%nt_range
+!      dt        = option%dt_out
+!      nboundary = b%nboundary 
+!
+!      ! Kijk
+!      !
+!      fwrk%K = 0.0d0
+!      f%K    = 0.0d0 
+!      do ib = -nboundary, nboundary
+!        if (ib == 0) cycle
+!        is1             = b%b2p(1, ib)
+!        is2             = b%b2p(2, ib)
+!        do inflx = 1, b%n_influx_boundary(is1)
+!          jb   = b%influx_boundary(inflx, is1)
+!          js1  = b%b2p(1, jb)
+!          js2  = b%b2p(2, jb)
+!
+!          ! Prep for weight_type = 2
+!          !
+!          if (option%weight_type == 2) then
+!            if (.not. allocated(pj)) then
+!              allocate(pj(nstate))
+!              allocate(comp(nstate))
+!            end if
+!
+!            Sprev = ip%Sjk(jb) 
+!
+!            pj    = 0.0d0
+!            comp  = 0
+!            ncomp = 0 
+!            do istate = 1, nstate
+!              if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then
+!                ncomp       = ncomp + 1
+!                comp(ncomp) = istate
+!                pj(ncomp)   = option%state_weight(istate)
+!              end if
+!            end do
+!            pj = pj / sum(pj)
+!
+!            dS = Sprev
+!            do icomp = 1, ncomp
+!              istate = comp(icomp)
+!              dS = dS - pj(icomp) * Sjk(jb, istate)
+!            end do
+!            !write(iw,'("dS = ", f20.10)') dS 
+!          end if
+!
+!
+!          wsum = 0.0d0
+!          do istate = 1, nstate
+!
+!            if (option%weight_type == 0) then
+!
+!              sw   = fj(istate)%hit_count(jb) 
+!              if (fj(istate)%hit_count(jb) > 0.1d0) then
+!                sw = 1.0d0
+!              else
+!                sw = 0.0d0
+!              end if 
+!              w    = option%state_weight(istate) * sw
+!              wsum = wsum + w 
+!              f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+!
+!            else if (option%weight_type == 1) then
+!
+!              if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then 
+!                if (fj(istate)%nstep_tot > 0) then
+!                  sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
+!                else 
+!                  sw = 0.0d0
+!                end if
+!
+!                w               = sw * option%state_weight(istate)
+!                wsum            = wsum + w
+!                f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+!              end if
+!
+!            else if (option%weight_type == 2) then
+!
+!              if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then
+!
+!                if (fj(istate)%nstep_tot > 0) then
+!                  sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
+!                else 
+!                  sw = 0.0d0
+!                end if
+!                sw              = Sjk(jb, istate) 
+!                !sw              = Sjk(jb, istate) + dS
+!                w               = sw * option%state_weight(istate)
+!                wsum            = wsum + w
+!                f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
+!              end if
+!            end if
+!
+!          end do
+!
+!          if (wsum < 1.0d-10) then 
+!            f%K(:, is2, jb) = 0.0d0 
+!          else
+!            f%K(:, is2, jb) = f%K(:, is2, jb) / wsum
+!          end if 
+!         
+!          ik = fwrk%kmesh(is2, is1, js1)
+!          if (ik == 0) cycle
+!
+!          fwrk%K(:, ik)  = f%K(:, is2, jb) * 100.0d0 * option%dt
+!          fwrk%nstep_tot = 1
+!        end do
+!      end do
+!
+!      do ib = -nboundary, nboundary
+!
+!        if (ib == 0) cycle
+!
+!        is1             = b%b2p(1, ib)
+!        is2             = b%b2p(2, ib)
+!
+!        if (sum(f%K(:, :, ib)*dt) > 1.0d-5) then
+!          !fwrk%h(is2, is1) = sum(f%K(:, :, ib)*dt) * 100
+!          fwrk%h(is2, is1) = 100.0d0
+!        end if 
+!      end do
+!
+!      ! Rij
+!      !
+!      !do is1 = 1, nstate
+!      !  do is2 = 1, nstate
+!      !    f%R(:, is2, is1) = fj(is1)%R(:, is2, is1)
+!      !  end do
+!      !end do
+!
+!    end subroutine calc_weighted_kernels
+!!-----------------------------------------------------------------------
+
+!-----------------------------------------------------------------------
+    subroutine calc_patch_kernels(patch_id, option, b, fj, fpatch)
+!-----------------------------------------------------------------------
+      implicit none
+
+      integer,           intent(in)    :: patch_id 
+      type(s_option),    intent(in)    :: option
+      type(s_boundary),  intent(inout) :: b
+      type(s_func),      intent(inout) :: fj(:)
+      type(s_func),      intent(inout) :: fpatch
 
       ! I/O
       !
@@ -1562,6 +1987,7 @@ module mod_analyze
       logical                :: sb
       logical                :: is_gen
       real(8)                :: dt
+      real(8)                :: Kint
 
       ! Dummy
       !
@@ -1581,8 +2007,6 @@ module mod_analyze
 
       ! Kijk
       !
-      fwrk%K = 0.0d0
-      f%K    = 0.0d0 
       do ib = -nboundary, nboundary
         if (ib == 0) cycle
         is1             = b%b2p(1, ib)
@@ -1592,75 +2016,14 @@ module mod_analyze
           js1  = b%b2p(1, jb)
           js2  = b%b2p(2, jb)
 
-          wsum = 0.0d0
-          do istate = 1, nstate
-
-            if (option%weight_type == 0) then
-
-              sw   = fj(istate)%hit_count(jb) 
-              if (fj(istate)%hit_count(jb) > 0.1d0) then
-                sw = 1.0d0
-              else
-                sw = 0.0d0
-              end if 
-              w    = option%state_weight(istate) * sw
-              wsum = wsum + w 
-              f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
-
-            else if (option%weight_type == 1) then
-
-              if (sum(fj(istate)%K(:, is2, jb)) > 1.0d-10) then 
-                if (fj(istate)%nstep_tot > 0) then
-                  sw = fj(istate)%hit_count(jb) / dble(fj(istate)%nstep_tot)
-                else 
-                  sw = 0.0d0
-                end if
-
-                w               = sw * option%state_weight(istate)
-                wsum            = wsum + w
-                f%K(:, is2, jb) = f%K(:, is2, jb) + w * fj(istate)%K(:, is2, jb)
-              end if
-
-            end if
-
-          end do
-
-          if (wsum < 1.0d-10) then 
-            f%K(:, is2, jb) = 0.0d0 
-          else
-            f%K(:, is2, jb) = f%K(:, is2, jb) / wsum
-          end if 
-         
-          ik = fwrk%kmesh(is2, is1, js1)
-          if (ik == 0) cycle
-
-          fwrk%K(:, ik)  = f%K(:, is2, jb) * 100.0d0 * option%dt
-          fwrk%nstep_tot = 1
+          Kint = sum(fj(patch_id)%K(:, is2, jb))
+          if (Kint > 1.0d-10) then
+            fpatch%K(:, is2, jb) = fj(patch_id)%K(:, is2, jb)
+          end if
         end do
       end do
 
-      do ib = -nboundary, nboundary
-
-        if (ib == 0) cycle
-
-        is1             = b%b2p(1, ib)
-        is2             = b%b2p(2, ib)
-
-        if (sum(f%K(:, :, ib)*dt) > 1.0d-5) then
-          !fwrk%h(is2, is1) = sum(f%K(:, :, ib)*dt) * 100
-          fwrk%h(is2, is1) = 100.0d0
-        end if 
-      end do
-
-      ! Rij
-      !
-      !do is1 = 1, nstate
-      !  do is2 = 1, nstate
-      !    f%R(:, is2, is1) = fj(is1)%R(:, is2, is1)
-      !  end do
-      !end do
-
-    end subroutine calc_weighted_kernels
+    end subroutine calc_patch_kernels
 !-----------------------------------------------------------------------
 
 !-----------------------------------------------------------------------

@@ -61,6 +61,7 @@
         allocate(ip%prob(nstate))
         allocate(ip%fe(nstate))
         allocate(ip%fe_pair(nstate, nstate))
+        allocate(ip%Sjk(-nboundary:nboundary))
       end if
 
       if (.not. allocated(Mu)) then
@@ -170,7 +171,7 @@
           Pint(is) = sum(f%P0(0:nt_range, is)) * dt
           do iu = 1, nbt
             if (map(2, iu) /= is) cycle
-            Pint(is) = Pint(is) + Mu(iu) * dt * Qint(iu)  
+            Pint(is) = Pint(is) + abs(Mu(iu)) * dt * abs(Qint(iu)) 
           end do
         end do
         
@@ -253,30 +254,31 @@
           stop
         end if
 
-!        ! << DEBUG
-!        write(iw,*)
-!        write(iw,'("[ Eigenvalues ]")')
-!        do iu = 1, nbt
-!          write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
-!        end do
-!        write(iw,*)
-!        write(iw,'("[ Eigenvector corresponding to steady state]")')
-!        iu = maxloc(wr(:), dim = 1)
-!
-!        write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
-!        do ju = 1, nbt
-!          write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
-!        end do 
-!        ! >> DEBUG
+        ! << DEBUG
+        !write(iw,*)
+        !write(iw,'("[ Eigenvalues ]")')
+        !do iu = 1, nbt
+        !  write(iw,'(i5,2x,f20.10, f20.10)') iu, wr(iu), wi(iu) 
+        !end do
+        !write(iw,*)
+        !write(iw,'("[ Eigenvector corresponding to steady state]")')
+        !iu = maxloc(wr(:), dim = 1)
+
+        !write(iw,'("Eigenvalue: ", f20.10)') wr(iu)
+        !do ju = 1, nbt
+        !  write(iw,'(i5,2x,f20.10)') ju, vr(ju, iu)
+        !end do 
+        ! >> DEBUG
 
         iu = maxloc(wr(:), dim = 1)
-        Qinf(:) = vr(:, iu)
+        !Qinf(:) = vr(:, iu)
+        Qinf(:) = abs(vr(:, iu))
 
         Pss = 0.0d0
         do is = 1, nstate 
           do ju = 1, nbt
             if (map(2, ju) /= is) cycle 
-            Pss(is) = Pss(is) + Mu(ju) * dt * Qinf(ju) 
+            Pss(is) = Pss(is) + abs(Mu(ju)) * dt * abs(Qinf(ju)) 
           end do
         end do
 
@@ -295,7 +297,8 @@
           end if
         end do
 
-        Pss(:) = Pss(:) / psum
+        Pss(:)  = Pss(:)  / psum
+        Qinf(:) = Qinf(:) / psum 
         do is = 1, nstate
           ip%prob(is) = Pss(is)
           ip%fe(is)   = -kT * log(ip%prob(is))
@@ -308,6 +311,17 @@
             if (option%is_reflect(js) .or. option%is_product(js)) cycle
             ip%fe_pair(js, is) = ip%fe(js) - ip%fe(is)
           end do
+        end do
+
+        ip%Sjk = 0.0d0
+        do iu = 1, nbt
+          ib         = mapb(iu)
+          ip%Sjk(ib) = abs(Qinf(iu))
+
+          if (boundary%conv_direc(ib)) then
+            ju         = mapb_inv(-ib)
+            ip%Sjk(ib) = abs(Qinf(ju))
+           end if
         end do
 
         ! Write steady-state properties
